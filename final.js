@@ -147,8 +147,6 @@ var d = document,
 		c = 'createElement',
 		autoSubscribeBox = d[c]('div');
 
-// TODO: Detect proper page
-
 function setStyle(node, css) {
 	node.setAttribute('style', css);
 }
