@@ -1,14 +1,160 @@
+// Don't want to pollute Facebook namespace ;)
+
+(function(){
+var UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' ),
+		UIBlockLen = 0,
+    finalUIBlock,
+    dataKeys = ['Other Activity', 'Music and Videos', 'Comments and Likes', 'Games', 'Photos', 'Status Updates', 'Life Events', 'Only Important', 'Most Updates', 'All Updates'],
+		inputSubscribeLevel = 'All Updates',
+		inputWatchLevels = ['Life Events'],
+		failedRows = [];
+
+// Grabbed from http://github.com/Ensighten/CSS-Query/blob/master/src/cssQuery.js
+var getDisplay = (function (win) {
+	var gCS = win.getComputedStyle;
+	return function (node) {
+		// Initially supported any key, but due to browser wars and size-first changed to fixed
+		var ret = '',
+				style;
+		// Skip over text nodes
+		if( node.nodeType !== 3 ) {
+			if(gCS) {
+				// Second parameter is for pseudo element (we never use it but FF complains otherwise)
+				style = gCS(node, null);
+				ret = style.getPropertyValue('display');
+			}
+			else {
+				style = node.currentStyle;
+				if( style ) {
+					// Reference for proper keys: http://msdn.microsoft.com/en-us/library/ms535231%28v=vs.85%29.aspx
+					ret = style.display;
+				}
+			}
+		}
+		ret += '';
+		return ret;
+	};
+}(window));
+
+function init(subscribeLevel, watchLevels) {
+	inputSubscribeLevel = subscribeLevel;
+	inputWatchLevels = watchLevels;
+	dataKeys = watchLevels.concat([subscribeLevel]);
+	scrollFriendsAsync();
+}
+
+// Scroll through all profiles
+function scrollFriendsAsync() {
+	function callbackSelf() {
+		setTimeout( scrollFriendsAsync, 1000 );
+	}
+
+	// Ensure that the remaining profiles are done loading
+	var UIPageLoader = DOM.find(document.body, '.uiMorePagerLoader');
+	if( UIPageLoader && getDisplay( UIPageLoader ) !== 'none' ) {
+		callbackSelf();
+		return;
+	}
+
+	// If condition is met, fire the callback and leave
+	if( UIBlockLen === UIBlocks.length ) {
+		autoSubscribeBody.innerHTML = 'Updating all subscriptions (your browser may freeze for a second)';
+		setTimeout( setAllSubscriptions, 100 );
+		return;
+	}
+
+	UIBlockLen = UIBlocks.length;
+	UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' );
+
+	// Make sure the last element isn't hidden
+	finalUIBlock = UIBlocks.pop();;
+	while( Parent.byClass(finalUIBlock, 'hidden_elem') ) {
+		finalUIBlock = UIBlocks.pop();
+	}
+
+	// Scroll to it
+	DOMScroll.scrollTo( finalUIBlock );
+
+	// Wait for profiles to load
+	callbackSelf();
+}
+
+function setAllSubscriptions() {
+	var UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' ),
+			UIBlockIndex,
+			UIBlockLen;
+	for( UIBlockIndex = 0, UIBlockLen = UIBlocks.length; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
+	// for( UIBlockIndex = 0, UIBlockLen = 1; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
+		UIBlock = UIBlocks[UIBlockIndex];
+		rowIdentifier = 'Row ' + UIBlockIndex;
+
+		try {
+			var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
+					a = DOM.find(contentBlock, 'a'),
+					profileId;
+
+			rowIdentifier = a.innerHTML;
+			profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
+
+			SubscriptionFlyoutController.show(
+				DOM.find(UIBlock, '.subscribeButtonsContainer')
+			);
+
+			var menuItems = document.getElementsByName('subscription_id'),
+					i,
+					dataObj = {};
+
+			for( i = menuItems.length; i--; ) {
+					menuItem = menuItems[i];
+					menuHTML = menuItem.parentNode.innerHTML;
+					for( j = dataKeys.length; j--; ) {
+							dataKey = dataKeys[j];
+							if( menuHTML.match(dataKey) ) {
+									dataObj[dataKey] = menuItem.value;
+							}
+					}
+			}
+
+			var subscribeLevel = dataObj[ inputSubscribeLevel ];
+			categories = [];
+			for( i = 0, len = inputWatchLevels.length; i < len; i++ ) {
+				categories.push( dataObj[ inputWatchLevels[i] ] );
+			}
+
+			var ajaxObj = {
+					profile_id: profileId,
+					level: subscribeLevel,
+					custom_categories: categories,
+					location: 3 // No idea what this means (I would guess URL)
+			};
+			new AsyncRequest().setURI('/ajax/follow/manage_subscriptions.php').setData(ajaxObj).send();
+
+		} catch(e) {
+			// TODO: Spit out errors
+			failedRows.push( rowIdentifier );
+		}
+	}
+	
+	autoSubscribeBody.innerHTML = 'Waiting for changes to complete.';
+	setTimeout( function () {
+		autoSubscribeBody.innerHTML = 'Refreshing your browser.<br/>You should see changes once the page reloads.<br/>Thank you and have a nice day!';
+		location.reload();
+	}, 5000 );
+}
+
 // Build container
 var d = document,
 		c = 'createElement',
 		autoSubscribeBox = d[c]('div');
+
+// TODO: Detect proper page
 
 function setStyle(node, css) {
 	node.setAttribute('style', css);
 }
 
 // It's over 9000!!
-setStyle( autoSubscribeBox, 'z-index: 9001; border: 1px solid #000; width: 300px; position: absolute; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF; ' );
+setStyle( autoSubscribeBox, 'z-index: 9001; border: 1px solid #000; width: 300px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF; ' );
 
 // Build and append second level
 var autoSubscribeHeader = d[c]('div'),
@@ -31,7 +177,8 @@ autoSubscribeHeader.appendChild(autoSubscribeCloseButton);
 // Body description
 var autoSubscribeDescription = d[c]('div'),
 		autoSubscribeDescriptionBr = d[c]('br');
-autoSubscribeDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
+
+autoSubscribeDescription.innerHTML = "The settings below will set <strong>all</strong> of your friends to the same subscription format. Click 'Change All Subscriptions' once you are ready.";
 autoSubscribeBody.appendChild(autoSubscribeDescription);
 autoSubscribeBody.appendChild(autoSubscribeDescriptionBr);
 
@@ -180,9 +327,23 @@ autoSubscribeCloseButton.onclick = function () {
 
 autoSubscribeSubmitButton.onclick = function () {
 	var i,
-			len,
+			len;
+
+	var $updateLevels = updateLevels,
+			updateLevel,
+			inputUpdateLevel = '';
+
+	for( i = 0, len = $updateLevels.length; i < len; i++ ) {
+		updateLevel = $updateLevels[i];
+
+		if( updateLevel.input.checked ) {
+			inputUpdateLevel = updateLevel.value;
+			break;
+		}
+	}
+
 			// Localize categories
-			$categories = categories,
+	var $categories = categories,
 			category,
 			inputCategories = [];
 
@@ -193,19 +354,20 @@ autoSubscribeSubmitButton.onclick = function () {
 			inputCategories.push( category.value );
 		}
 	}
-	
-	var $updateLevels = updateLevels,
-			updateLevel,
-			inputUpdateLevel = '';
-	
-	for( i = 0, len = $updateLevels.length; i < len; i++ ) {
-		updateLevel = $updateLevels[i];
-		
-		if( updateLevel.input.checked ) {
-			inputUpdateLevel = updateLevel.value;
-			break;
-		}
-	}
-	
-	console.log( inputUpdateLevel, inputCategories );
+
+	autoSubscribeBody.innerHTML = 'Scrolling profiles...';
+	init(inputUpdateLevel, inputCategories);
 };
+
+/** BEGIN PATCH FOR WRONG PAGE **/
+var pageQueryString = location.search || '';
+if( !pageQueryString.match(/sk=subscribedto/) || !pageQueryString.match(/filter=1/) ) {
+	autoSubscribeBody.innerHTML = 'You are not on the correct page.<br/>Click the link below to go to the correct page.<br/>From there, reload this script.<br/><br/><a href="http://www.facebook.com/profile.php?sk=subscribedto&filter=1">http://www.facebook.com/profile.php?sk=subscribedto&filter=1</a>';
+}
+
+/** END PATCH FOR WRONG PAGE **/
+
+// Focus on our element
+autoSubscribeBox.scrollIntoView();
+
+}());
