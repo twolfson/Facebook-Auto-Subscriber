@@ -1,39 +1,74 @@
-// Build container
+(function(){
+// Localize document and simplify element creation
 var d = document,
 		c = 'createElement',
-		autoSubscribeBox = d[c]('div');
+		crElt = function (eltName) {
+			return d[c](eltName);
+		};
 
+// Helper function for setting style on elements
 function setStyle(node, css) {
 	node.setAttribute('style', css);
 }
 
-// It's over 9000!!
-setStyle( autoSubscribeBox, 'z-index: 9001; border: 1px solid #000; width: 300px; position: absolute; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF; ' );
+// Helper function for setting for on elements
+function setStyle(node, id) {
+	node.setAttribute('for', id);
+}
 
-// Build and append second level
-var autoSubscribeHeader = d[c]('div'),
-		autoSubscribeBody = d[c]('div');
-setStyle( autoSubscribeHeader, 'border-bottom: 1px solid #000; padding: .2em .3em;');
-setStyle( autoSubscribeBody, 'padding: .2em .3em;');
-autoSubscribeBox.appendChild(autoSubscribeHeader);
-autoSubscribeBox.appendChild(autoSubscribeBody);
+/** BEGIN CONTAINER SECTION **/
+// Create container
+var container = crElt('div');
 
-// Fill in header
-var autoSubscribeHeaderText = d[c]('div'),
-		autoSubscribeCloseButton = d[c]('div');
-setStyle( autoSubscribeHeaderText, 'display: inline' );
-autoSubscribeHeaderText.innerHTML = 'Auto Subscriber';
-setStyle( autoSubscribeCloseButton, 'border: 1px solid #000; cursor: pointer; font-family: monospace; width: 1.1em; height: 1.2em; text-align: center; float: right; background: pink;' );
-autoSubscribeCloseButton.innerHTML = 'x';
-autoSubscribeHeader.appendChild(autoSubscribeHeaderText);
-autoSubscribeHeader.appendChild(autoSubscribeCloseButton);
+// Make it a popup with style (It's over 9000!!)
+setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 300px; position: absolute; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF; ' );
+/** END CONTAINER SECTION **/
 
-// Body description
-var autoSubscribeDescription = d[c]('div'),
-		autoSubscribeDescriptionBr = d[c]('br');
-autoSubscribeDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
-autoSubscribeBody.appendChild(autoSubscribeDescription);
-autoSubscribeBody.appendChild(autoSubscribeDescriptionBr);
+/** BEGIN HEADER SECTION **/
+// Create header
+var header = crElt('div');
+
+// Add bottom border to header
+setStyle( header, 'border-bottom: 1px solid #000; padding: .2em .3em;');
+
+/** BEGIN SUBSECTION: HEADER CONTENT **/
+// Create a title and close button
+var headerTitle = d[c]('div'),
+		closeButton = d[c]('div');
+
+// Add style and fill in text for title
+setStyle( headerTitle, 'display: inline' );
+headerTitle.innerHTML = 'Auto Subscriber';
+
+// Make closeButton pink with black border and fill it in with an 'x'
+setStyle( closeButton, 'border: 1px solid #000; cursor: pointer; font-family: monospace; width: 1.1em; height: 1.2em; text-align: center; float: right; background: pink;' );
+closeButton.innerHTML = 'x';
+
+// Add title and close button to header
+header.appendChild(headerTitle);
+header.appendChild(closeButton);
+/** END SUBSECTION: HEADER CONTENT **/
+
+// Add header to container
+container.appendChild(header);
+/** END HEADER SECTION **/
+
+/** BEGIN BODY SECTION **/
+// Create "body" element
+var body = crElt('div');
+
+// Give some padding to the body
+setStyle( body, 'padding: .2em .3em;');
+
+/** BEGIN SUBSECTION: BODY DESCRIPTION **/
+// Create description and line break
+var bodyDescription = crElt('div'),
+		br = crElt('br');
+
+bodyDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
+body.appendChild(bodyDescription);
+body.appendChild(br);
+/** END SUBSECTION: BODY DESCRIPTION **/
 
 // Update level fieldset
 var autoSubscribeUpdateLevelFieldset = d[c]('fieldset'),
@@ -43,14 +78,11 @@ var autoSubscribeUpdateLevelFieldset = d[c]('fieldset'),
 		autoSubscribeUpdateLevelDisableLabel = d[c]('label'),
 		// DRY is awesome
 		updateLevels = [
-			{
-				'value': 'All Updates',
-			}, {
-				'value': 'Most Updates',
-				'checked': 1
-			}, {
-				'value': 'Only Important'
-			}],
+			{ 'value': 'All Updates' },
+			{ 'value': 'Most Updates',
+				'checked': 1 },
+			{	'value': 'Only Important' }
+		],
 		updateLevel,
 		autoSubscribeUpdateLevelRow,
 		autoSubscribeUpdateLevelInput,
@@ -110,8 +142,8 @@ for( i = 0, len = updateLevels.length; i < len; i++ ) {
 	updateLevel.input = autoSubscribeUpdateLevelInput;
 }
 
-autoSubscribeBody.appendChild(autoSubscribeUpdateLevelFieldset);
-autoSubscribeBody.appendChild(autoSubscribeUpdateLevelBr);
+body.appendChild(autoSubscribeUpdateLevelFieldset);
+body.appendChild(autoSubscribeUpdateLevelBr);
 
 // Category fieldset
 var autoSubscribeCategoryFieldset = d[c]('fieldset'),
@@ -196,8 +228,8 @@ for( i = 0, len = categories.length; i < len; i++ ) {
 			// Save altered state
 			category.state = state;
 	}(category));
-	
-	
+
+
 
 	styleButton = (function(category){
 		return function () {
@@ -226,7 +258,7 @@ for( i = 0, len = categories.length; i < len; i++ ) {
 	}(category));
 
 	autoSubscribeCategoryInput.onclick = function () { alterState(); styleButton() };
-	
+
 	// Save for later
 	category.styleButton = styleButton;
 
@@ -234,8 +266,8 @@ for( i = 0, len = categories.length; i < len; i++ ) {
 	styleButton();
 }
 
-autoSubscribeBody.appendChild(autoSubscribeCategoryFieldset);
-autoSubscribeBody.appendChild(autoSubscribeCategoryBr);
+body.appendChild(autoSubscribeCategoryFieldset);
+body.appendChild(autoSubscribeCategoryBr);
 
 // Submit button
 var autoSubscribeSubmitContainer = d[c]('div'),
@@ -245,13 +277,18 @@ autoSubscribeSubmitButton.value = 'Change All Subscriptions';
 setStyle( autoSubscribeSubmitContainer, 'text-align: right;' );
 setStyle( autoSubscribeSubmitButton, 'cursor: pointer;' );
 autoSubscribeSubmitContainer.appendChild(autoSubscribeSubmitButton);
-autoSubscribeBody.appendChild(autoSubscribeSubmitContainer);
+body.appendChild(autoSubscribeSubmitContainer);
 
-d.body.appendChild(autoSubscribeBox);
+container.appendChild(body);
+/** END BODY SECTION **/
+
+/** BEGIN DOM LOGIC SECTION **/
+// Attach container to the body
+d.body.appendChild(container);
 
 // Hook in events for close button and 'Change All Subscriptions'
-autoSubscribeCloseButton.onclick = function () {
-	d.body.removeChild(autoSubscribeBox);
+closeButton.onclick = function () {
+	d.body.removeChild(container);
 };
 
 autoSubscribeSubmitButton.onclick = function () { // TODO: Collect info from disables
