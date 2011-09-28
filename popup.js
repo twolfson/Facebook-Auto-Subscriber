@@ -39,6 +39,8 @@ autoSubscribeBody.appendChild(autoSubscribeDescriptionBr);
 var autoSubscribeUpdateLevelFieldset = d[c]('fieldset'),
 		autoSubscribeUpdateLevelLegend = d[c]('legend'),
 		autoSubscribeUpdateLevelBr = d[c]('br'),
+		autoSubscribeUpdateLevelDisableCheckbox = d[c]('input'),
+		autoSubscribeUpdateLevelDisableLabel = d[c]('label'),
 		// DRY is awesome
 		updateLevels = [
 			{
@@ -60,6 +62,24 @@ var autoSubscribeUpdateLevelFieldset = d[c]('fieldset'),
 
 autoSubscribeUpdateLevelLegend.innerHTML = 'How many updates?';
 autoSubscribeUpdateLevelFieldset.appendChild(autoSubscribeUpdateLevelLegend);
+
+// Generate disable row
+autoSubscribeUpdateLevelRow = d[c]('div');
+key = 'autoSubscribeUpdateLevelDisable';
+
+autoSubscribeUpdateLevelDisableCheckbox.type = 'checkbox';
+autoSubscribeUpdateLevelDisableCheckbox.id = key;
+autoSubscribeUpdateLevelDisableCheckbox.name = key;
+
+autoSubscribeUpdateLevelDisableLabel.setAttribute('for', key);
+autoSubscribeUpdateLevelDisableLabel.innerHTML = 'Ignore this section';
+
+// Append to fieldset
+autoSubscribeUpdateLevelRow.appendChild(autoSubscribeUpdateLevelDisableCheckbox);
+autoSubscribeUpdateLevelRow.appendChild(autoSubscribeUpdateLevelDisableLabel);
+autoSubscribeUpdateLevelFieldset.appendChild(autoSubscribeUpdateLevelRow);
+autoSubscribeUpdateLevelFieldset.appendChild(autoSubscribeUpdateLevelBr);
+autoSubscribeUpdateLevelBr = d[c]('br');
 
 // Iterate the updateLevels and append to fieldset
 for( i = 0, len = updateLevels.length; i < len; i++ ) {
@@ -97,37 +117,42 @@ autoSubscribeBody.appendChild(autoSubscribeUpdateLevelBr);
 var autoSubscribeCategoryFieldset = d[c]('fieldset'),
 		autoSubscribeCategoryLegend = d[c]('legend'),
 		autoSubscribeCategoryBr = d[c]('br'),
+		autoSubscribeCategorySpan = d[c]('span'),
 		// DRY is awesome
 		categories = [
 			{
 				'value': 'Life Events',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Status Updates',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Photos',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Games',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Comments and Likes',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Music and Videos',
-				'checked': 1
+				'state': 1
 			}, {
 				'value': 'Other Activity',
-				'checked': 1
+				'state': 1
 			}],
 		category,
 		autoSubscribeCategoryRow,
 		autoSubscribeCategoryInput,
-		autoSubscribeCategoryLabel;
+		autoSubscribeCategoryLabel,
+		inputFn;
 
 autoSubscribeCategoryLegend.innerHTML = 'What types of updates?';
 autoSubscribeCategoryFieldset.appendChild(autoSubscribeCategoryLegend);
+
+autoSubscribeCategorySpan.innerHTML = '&nbsp;// <b>Rem</b> = \'Remove from feed\';<br/>&nbsp;// <b>DoC</b> = \'Don\'t Change\'; <b>Add</b> = \'Add to feed\';';
+autoSubscribeCategoryFieldset.appendChild(autoSubscribeCategorySpan);
 
 // Same as before
 for( i = 0, len = categories.length; i < len; i++ ) {
@@ -141,21 +166,72 @@ for( i = 0, len = categories.length; i < len; i++ ) {
 	autoSubscribeCategoryInput.type = 'checkbox';
 	autoSubscribeCategoryInput.id = key;
 	autoSubscribeCategoryInput.name = key;
-	if( category.checked ) {
-		autoSubscribeCategoryInput.checked = 'checked';
-	}
 	autoSubscribeCategoryInput.value = value;
 
 	autoSubscribeCategoryLabel = d[c]('label');
+	setStyle( autoSubscribeCategoryLabel, 'font-weight: normal;' );
 	autoSubscribeCategoryLabel.setAttribute('for', key);
-	autoSubscribeCategoryLabel.innerHTML = value;
 
 	autoSubscribeCategoryRow.appendChild(autoSubscribeCategoryInput);
 	autoSubscribeCategoryRow.appendChild(autoSubscribeCategoryLabel);
 	autoSubscribeCategoryFieldset.appendChild(autoSubscribeCategoryRow);
 
+
 	// Save inputs for later (Mmmm, memory leak)
 	category.input = autoSubscribeCategoryInput;
+	category.label = autoSubscribeCategoryLabel;
+
+	// Bind closured onclick
+	alterState = (function(category){
+			var state = category.state;
+
+			// Change to the new state
+			state += 1;
+
+			// I could do modular logic, but this is much easier to adjust/consume
+			if( state === 2 ) {
+				state = -1;
+			}
+
+			// Save altered state
+			category.state = state;
+	}(category));
+	
+	
+
+	styleButton = (function(category){
+		return function () {
+			var input = category.input,
+					label = category.label,
+					labelHTML = '(Rem/DoC/Add) ' + category.value,
+					labelReplaceFn = function(text, index) { return '<b>' + text + '</b>' },
+					state = category.state;
+
+			input.indeterminate = false;
+			input.checked = false;
+
+			// -1 will be remove item from feed
+			if( state === -1 ) {
+				label.innerHTML = labelHTML.replace('Rem', labelReplaceFn);
+			// 0 will be don't change
+			} else if ( state === 0 ) {
+				label.innerHTML = labelHTML.replace('DoC', labelReplaceFn);
+				input.indeterminate = true;
+			// 1 will be add item to feed
+			} else {
+				label.innerHTML = labelHTML.replace('Add', labelReplaceFn);
+				input.checked = true;
+			}
+		};
+	}(category));
+
+	autoSubscribeCategoryInput.onclick = function () { alterState(); styleButton() };
+	
+	// Save for later
+	category.styleButton = styleButton;
+
+	// Activate now to invoke proper state
+	styleButton();
 }
 
 autoSubscribeBody.appendChild(autoSubscribeCategoryFieldset);
@@ -178,7 +254,7 @@ autoSubscribeCloseButton.onclick = function () {
 	d.body.removeChild(autoSubscribeBox);
 };
 
-autoSubscribeSubmitButton.onclick = function () {
+autoSubscribeSubmitButton.onclick = function () { // TODO: Collect info from disables
 	var i,
 			len,
 			// Localize categories
@@ -193,19 +269,26 @@ autoSubscribeSubmitButton.onclick = function () {
 			inputCategories.push( category.value );
 		}
 	}
-	
+
 	var $updateLevels = updateLevels,
 			updateLevel,
 			inputUpdateLevel = '';
-	
+
 	for( i = 0, len = $updateLevels.length; i < len; i++ ) {
 		updateLevel = $updateLevels[i];
-		
+
 		if( updateLevel.input.checked ) {
 			inputUpdateLevel = updateLevel.value;
 			break;
 		}
 	}
-	
+
 	console.log( inputUpdateLevel, inputCategories );
 };
+
+// TODO: Bind disable handling for 'ignore this section'
+// TODO: Add checkbox for 'skip unsubscribed friends' but build to handle any callback fn
+// TODO: Separate each friend into data object, then push onto massive array
+// TODO: Add 'ignore this section' (make it look like a link) into legend instead of as a checkbox
+// TODO: Move function binding for Rem/DoC/Add down here?
+// TODO: Add in Rem All, DoC All, Add All buttons and bindings
