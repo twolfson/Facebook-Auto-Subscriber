@@ -37,7 +37,7 @@ function exec(fn) {
 var i,
 		len,
 		levelFieldsetObj =
-			{ 'state': 1 },
+			{ 'state': 1 }, // TODO: Add toggleElts array here, hook in fieldsetRows during creation, use display: none (easier than removing, rebinding) during hiding
 		levelObjArr = [
 			{ 'value': 'All Updates' },
 			{ 'value': 'Most Updates',
@@ -82,7 +82,10 @@ var container = crElt('div'),
 				// Level fieldset
 				levelFieldset = bindNewElt(body, 'fieldset');
 				levelFieldsetObj.fieldset = levelFieldset;
-					levelFieldsetObj.legend = bindNewElt(levelFieldset, 'legend');
+var				levelLegend = bindNewElt(levelFieldset, 'legend'),
+						levelLegendSpanPreU = bindNewElt(levelLegend, 'span');
+						levelFieldsetObj.u = bindNewElt(levelLegend, 'u');
+						levelLegendSpanPostU = bindNewElt(levelLegend, 'span');
 var				levelFieldRow;
 					for( i = 0, len = levelObjArr.length; i < len; i++ ) {
 						levelObj = levelObjArr[i];
@@ -94,7 +97,10 @@ var				levelFieldRow;
 				// Category fieldset
 var     categoryFieldset = bindNewElt(body, 'fieldset');
 				categoryFieldsetObj.fieldset = categoryFieldset;
-					categoryFieldsetObj.legend = bindNewElt(categoryFieldset, 'legend');
+var				categoryLegend = bindNewElt(categoryFieldset, 'legend'),
+						categoryLegendSpanPreU = bindNewElt(categoryLegend, 'span');
+						categoryFieldsetObj.u = bindNewElt(categoryLegend, 'u');
+						categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span');
 var				categorySpan = bindNewElt(categoryFieldset, 'span'),
 					categoryFieldRow;
 					for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
@@ -119,21 +125,22 @@ var			submitContainer = bindNewElt(body, 'div'),
 	bodyDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
 	// Level fieldset
 		function getFieldsetHtmlFn(fieldsetObj) {
-			var html = fieldsetObj.baseHTML + ' (Use/Ignore this section)';
 			return function () {
 				var state = fieldsetObj.state,
-						legend = fieldsetObj.legend,
-						legendReplaceFn = function (text, index) { return '<b>' + text + '</b>'; };
+						html = 'Use/Ignore this section',
+						u = fieldsetObj.u,
+						uReplaceFn = function (text, index) { return '<b>' + text + '</b>'; };
 
 				if( state ) {
-					legend.innerHTML = html.replace('Use', legendReplaceFn );
+					u.innerHTML = html.replace('Use', uReplaceFn );
 				} else {
-					legend.innerHTML = html.replace('Ignore', legendReplaceFn );
+					u.innerHTML = html.replace('Ignore', uReplaceFn );
 				}
 			}
 		}
 
-		levelFieldsetObj.baseHTML = 'How many updates?';
+		levelLegendSpanPreU.innerHTML = 'How many updates? (';
+		levelLegendSpanPostU.innerHTML = ')';
 		levelFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(levelFieldsetObj) );
 
 		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
@@ -143,7 +150,8 @@ var			submitContainer = bindNewElt(body, 'div'),
 		}
 
 	// Category fieldset
-		categoryFieldsetObj.baseHTML = 'What types of updates?';
+		categoryLegendSpanPreU.innerHTML = 'What types of updates? (';
+		categoryLegendSpanPostU.innerHTML = ')';
 		categoryFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(categoryFieldsetObj) );
 		categorySpan.innerHTML = '&nbsp;// <b>Rem</b> = \'Remove from feed\';<br/>&nbsp;// <b>DoC</b> = \'Don\'t Change\'; <b>Add</b> = \'Add to feed\';';
 
@@ -191,6 +199,7 @@ setStyle( header, 'border-bottom: 1px solid #000; ' + paddingContainerChildren);
 setStyle( body, paddingContainerChildren);
 	// Level fieldset
 	function getFieldsetStyleFn(fieldsetObj) {
+		setStyle( fieldsetObj.u, 'cursor: pointer' );
 		return function () {
 			// TODO: Figure out hiding/not hiding
 		}
@@ -253,7 +262,7 @@ setStyle( body, paddingContainerChildren);
 				htmlStyleFn();
 			};
 		}
-		levelFieldsetObj.legend.onclick = getFieldsetOnclick(levelFieldsetObj);
+		levelFieldsetObj.u.onclick = getFieldsetOnclick(levelFieldsetObj);
 		// Radio buttons
 		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
 			levelObj = levelObjArr[i];
@@ -271,7 +280,7 @@ setStyle( body, paddingContainerChildren);
 		}
 	// Category fieldset
 		// Legend
-		categoryFieldsetObj.legend.onclick = getFieldsetOnclick(categoryFieldsetObj);
+		categoryFieldsetObj.u.onclick = getFieldsetOnclick(categoryFieldsetObj);
 		// Checkboxes
 		// State function for checkboxes
 		function getCategoryOnclick(categoryObj) {
