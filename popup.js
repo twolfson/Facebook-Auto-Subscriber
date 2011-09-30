@@ -17,9 +17,14 @@ function setStyle(node, css) {
 	node.setAttribute('style', css);
 }
 
-// Helper function for setting for on elements
-function setFor(node, id) {
-	node.setAttribute('for', id);
+// Helper function for setting attributes on elements
+function setAttributes( node, attrObj ) {
+	var key;
+	for( key in attrObj ) {
+		if( attrObj.hasOwnProperty(key) ) {
+			node.setAttribute(key, attrObj[key]);
+		}
+	}
 }
 
 // Helper function to run and return a function
@@ -31,6 +36,8 @@ function exec(fn) {
 /** BEGIN DRY PREP DATA **/
 var i,
 		len,
+		levelFieldsetObj =
+			{ 'state': 1 },
 		levelObjArr = [
 			{ 'value': 'All Updates' },
 			{ 'value': 'Most Updates',
@@ -42,6 +49,8 @@ var i,
 		label,
 		key,
 		val,
+		categoryFieldsetObj =
+			{ 'state': 1 },
 		categoryObjArr = [
 			{	'value': 'Life Events',
 				'state': 1 },
@@ -71,13 +80,10 @@ var container = crElt('div'),
 				bodyDescription = bindNewElt(body, 'div'),
 				bodyDescriptionBr = bindNewElt(body, 'br'),
 				// Level fieldset
-				levelFieldset = bindNewElt(body, 'fieldset'),
-					levelLegend = bindNewElt(levelFieldset, 'legend'),
-					levelFieldRow;
-					// TODO: Replace into legend
-					// levelBr = bindNewElt(levelFieldset, 'br'),
-					// autoSubscribeUpdateLevelDisableCheckbox = d[c]('input'),
-					// autoSubscribeUpdateLevelDisableLabel = d[c]('label'),
+				levelFieldset = bindNewElt(body, 'fieldset');
+				levelFieldsetObj.fieldset = levelFieldset;
+					levelFieldsetObj.legend = bindNewElt(levelFieldset, 'legend');
+var				levelFieldRow;
 					for( i = 0, len = levelObjArr.length; i < len; i++ ) {
 						levelObj = levelObjArr[i];
 						levelFieldRow = bindNewElt(levelFieldset, 'div');
@@ -86,9 +92,10 @@ var container = crElt('div'),
 						levelObj.label = bindNewElt(levelFieldRow, 'label');
 					}
 				// Category fieldset
-var     categoryFieldset = bindNewElt(body, 'fieldset'),
-					categoryLegend = bindNewElt(categoryFieldset, 'legend'),
-					categorySpan = bindNewElt(categoryFieldset, 'span'),
+var     categoryFieldset = bindNewElt(body, 'fieldset');
+				categoryFieldsetObj.fieldset = categoryFieldset;
+					categoryFieldsetObj.legend = bindNewElt(categoryFieldset, 'legend');
+var				categorySpan = bindNewElt(categoryFieldset, 'span'),
 					categoryFieldRow;
 					for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
 						categoryObj = categoryObjArr[i];
@@ -111,8 +118,24 @@ var			submitContainer = bindNewElt(body, 'div'),
 	// Body description
 	bodyDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
 	// Level fieldset
-		// Technically, this is handled by functional bindings, but it is nice to have a fallback
-		levelLegend.innerHTML = 'How many updates?'; // TODO: (Use/ignore this section)
+		function getFieldsetHtmlFn(fieldsetObj) {
+			var html = fieldsetObj.baseHTML + ' (Use/Ignore this section)';
+			return function () {
+				var state = fieldsetObj.state,
+						legend = fieldsetObj.legend,
+						legendReplaceFn = function (text, index) { return '<b>' + text + '</b>'; };
+
+				if( state ) {
+					legend.innerHTML = html.replace('Use', legendReplaceFn );
+				} else {
+					legend.innerHTML = html.replace('Ignore', legendReplaceFn );
+				}
+			}
+		}
+
+		levelFieldsetObj.baseHTML = 'How many updates?';
+		levelFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(levelFieldsetObj) );
+
 		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
 			levelObj = levelObjArr[i];
 			levelObj.input.type = 'radio';
@@ -120,7 +143,8 @@ var			submitContainer = bindNewElt(body, 'div'),
 		}
 
 	// Category fieldset
-		categoryLegend.innerHTML = 'What types of updates?'; // TODO: (Use/ignore this section)
+		categoryFieldsetObj.baseHTML = 'What types of updates?';
+		categoryFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(categoryFieldsetObj) );
 		categorySpan.innerHTML = '&nbsp;// <b>Rem</b> = \'Remove from feed\';<br/>&nbsp;// <b>DoC</b> = \'Don\'t Change\'; <b>Add</b> = \'Add to feed\';';
 
 		function getCategoryHTMLFn(categoryObj) {
@@ -166,115 +190,132 @@ setStyle( header, 'border-bottom: 1px solid #000; ' + paddingContainerChildren);
 // Body
 setStyle( body, paddingContainerChildren);
 	// Level fieldset
-	for( i = 0, len = levelObjArr.length; i < len; i++ ) {
-		levelObj = levelObjArr[i];
-		levelObj.input.checked = levelObj.checked;
-	}
-	// Category fieldset
-	function getCategoryStyleFn(categoryObj) {
+	function getFieldsetStyleFn(fieldsetObj) {
 		return function () {
-			var input = categoryObj.input,
-					state = categoryObj.state;
+			// TODO: Figure out hiding/not hiding
+		}
+	}
+	levelFieldsetObj.styleFn = exec( getFieldsetStyleFn(levelFieldsetObj) );
+		// Radio buttons
+		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+			levelObj = levelObjArr[i];
+			levelObj.input.checked = levelObj.checked;
+		}
+	// Category fieldset
+	categoryFieldsetObj.styleFn = exec( getFieldsetStyleFn(categoryFieldsetObj) );
+		// Checkboxes
+		function getCategoryStyleFn(categoryObj) {
+			return function () {
+				var input = categoryObj.input,
+						state = categoryObj.state;
 
-			// 0 will be don't change (indeterminate)
-			if( state === 0 ) {
-				input.indeterminate = true;
-				input.checked = false;
-			} else {
-				// -1 will be remove item from feed (unchecked)
-				// 1 will be add item to feed (checked)
-				input.indeterminate = false;
-				input.checked = (state === 1);
-			}
-		};
-	}
-	for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
-		categoryObj = categoryObjArr[i];
-		categoryObj.input.type = 'checkbox';
-		setStyle( categoryObj.label, 'font-weight: normal;' );
-		categoryObj.styleFn = exec( getCategoryStyleFn(categoryObj) );
-	}
+				// 0 will be don't change (indeterminate)
+				if( state === 0 ) {
+					input.indeterminate = true;
+					input.checked = false;
+				} else {
+					// -1 will be remove item from feed (unchecked)
+					// 1 will be add item to feed (checked)
+					input.indeterminate = false;
+					input.checked = (state === 1);
+				}
+			};
+		}
+		for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+			categoryObj = categoryObjArr[i];
+			categoryObj.input.type = 'checkbox';
+			setStyle( categoryObj.label, 'font-weight: normal;' );
+			categoryObj.styleFn = exec( getCategoryStyleFn(categoryObj) );
+		}
 	// Submit container
 	setStyle( submitContainer, 'text-align: right;' );
 		setStyle( submitButton, 'cursor: pointer;' );
 /** END STYLING CONTAINER **/
 
 /** BEGIN FUNCTIONALITY BINDING **/
-function setAttributes( node, attrObj ) {
-	var key;
-	for( key in attrObj ) {
-		if( attrObj.hasOwnProperty(key) ) {
-			node.setAttribute(key, attrObj[key]);
-		}
-	}
-}
-
 // Header
 	closeButton.onclick = function () {
 		d.body.removeChild(container);
 	};
 // Body
 	// Level fieldset
-	// TODO: Build ignoreSection
-	for( i = 0, len = levelObjArr.length; i < len; i++ ) {
-		levelObj = levelObjArr[i];
+		// Legend
+		function getFieldsetOnclick(fieldsetObj) {
+			var htmlFn = fieldsetObj.htmlFn,
+			    styleFn = fieldsetObj.styleFn,
+					htmlStyleFn = function () {
+						htmlFn();
+						styleFn();
+					};
 
-		// Set up a common key so clicks on label can bind to input
-		key = 'autoSubscribeUpdateLevel' + i;
+			return function () {
+				fieldsetObj.state ^= 1;
+				htmlStyleFn();
+			};
+		}
+		levelFieldsetObj.legend.onclick = getFieldsetOnclick(levelFieldsetObj);
+		// Radio buttons
+		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+			levelObj = levelObjArr[i];
 
-		setAttributes( levelObj.input, {
-				'id': key,
-				'name': 'autoSubscribeUpdateLevel',
-				'value': levelObj.value
-			});
+			// Set up a common key so clicks on label can bind to input
+			key = 'autoSubscribeUpdateLevel' + i;
 
-		levelObj.label.setAttribute('for', key);
-	}
+			setAttributes( levelObj.input, {
+					'id': key,
+					'name': 'autoSubscribeUpdateLevel',
+					'value': levelObj.value
+				});
+
+			levelObj.label.setAttribute('for', key);
+		}
 	// Category fieldset
-	// TODO: Build ignoreSection
-	// State function for checkboxes
-	function getCategoryOnclick(categoryObj) {
-		var htmlFn = categoryObj.htmlFn,
-				styleFn = categoryObj.styleFn,
-				htmlStyleFn = function () {
-					htmlFn();
-					styleFn();
+		// Legend
+		categoryFieldsetObj.legend.onclick = getFieldsetOnclick(categoryFieldsetObj);
+		// Checkboxes
+		// State function for checkboxes
+		function getCategoryOnclick(categoryObj) {
+			var htmlFn = categoryObj.htmlFn,
+					styleFn = categoryObj.styleFn,
+					htmlStyleFn = function () {
+						htmlFn();
+						styleFn();
+					};
+			return function() {
+				// Get and adjust to new state
+				var state = categoryObj.state + 1;
+
+				// If state is 2, set to -1 (this could be modular logic but I won't)
+				if( state === 2 ) {
+					state = -1;
 				}
-		return function() {
-			// Get and adjust to new state
-			var state = categoryObj.state + 1;
 
-			// If state is 2, set to -1 (this could be modular logic but I won't)
-			if( state === 2 ) {
-				state = -1;
-			}
+				// Save altered state
+				categoryObj.state = state;
 
-			// Save altered state
-			categoryObj.state = state;
+				// Change HTML and style object
+				htmlStyleFn();
+			};
+		}
 
-			// Change HTML and style object
-			htmlStyleFn();
-		};
-	}
+		// Binding portion
+		for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+			categoryObj = categoryObjArr[i];
+			key = 'autoSubscribeCategory' + i;
+			val = categoryObj.value;
+			input = categoryObj.input;
 
-	// Styling function for label
+			// Browser-level fuctionality
+			setAttributes( input, {
+				'id': key,
+				'name': key,
+				'value': val } );
+			categoryObj.label.setAttribute('for', key);
 
-	for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
-		categoryObj = categoryObjArr[i];
-		key = 'autoSubscribeCategory' + i;
-		val = categoryObj.value;
-		input = categoryObj.input;
+			// DOM Level 0 functionality
+			input.onclick = getCategoryOnclick(categoryObj);
+		}
 
-		// Browser-level fuctionality
-		setAttributes( input, {
-			'id': key,
-			'name': key,
-			'value': val } );
-		categoryObj.label.setAttribute('for', key);
-
-		// DOM Level 0 functionality
-		input.onclick = getCategoryOnclick(categoryObj);
-	}
 	// Submit container
 		function getLevel(levelObjArr) {
 			var i,
@@ -286,7 +327,7 @@ function setAttributes( node, attrObj ) {
 				levelObj = levelObjArr[i];
 
 				if( levelObj.input.checked ) {
-					retVal = levelObj.value;
+					inputLevel = levelObj.value;
 					break;
 				}
 			}
@@ -317,7 +358,7 @@ function setAttributes( node, attrObj ) {
 			var inputLevel = getLevel(levelObjArr),
 					inputCategories = getCategories(categoryObjArr);
 
-			console.log( inputUpdateLevel, inputCategories );
+			console.log( inputLevel, inputCategories );
 		};
 /** END FUNCTIONALITY BINDING **/
 
