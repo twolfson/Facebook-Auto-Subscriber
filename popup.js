@@ -37,7 +37,7 @@ function exec(fn) {
 var i,
 		len,
 		levelFieldsetObj =
-			{ 'state': 1 }, // TODO: Add toggleElts array here, hook in fieldsetRows during creation, use display: none (easier than removing, rebinding) during hiding
+			{ 'state': 1 },
 		levelObjArr = [
 			{ 'value': 'All Updates' },
 			{ 'value': 'Most Updates',
@@ -81,33 +81,35 @@ var container = crElt('div'),
 				bodyDescriptionBr = bindNewElt(body, 'br'),
 				// Level fieldset
 				levelFieldset = bindNewElt(body, 'fieldset');
-				levelFieldsetObj.fieldset = levelFieldset;
 var				levelLegend = bindNewElt(levelFieldset, 'legend'),
 						levelLegendSpanPreU = bindNewElt(levelLegend, 'span');
 						levelFieldsetObj.u = bindNewElt(levelLegend, 'u');
 						levelLegendSpanPostU = bindNewElt(levelLegend, 'span');
-var				levelFieldRow;
+var				levelFieldRow,
+					levelToggleDiv = bindNewElt(levelFieldset, 'div');
+					levelFieldsetObj.toggleDiv = levelToggleDiv;
 					for( i = 0, len = levelObjArr.length; i < len; i++ ) {
 						levelObj = levelObjArr[i];
-						levelFieldRow = bindNewElt(levelFieldset, 'div');
+						levelFieldRow = bindNewElt(levelToggleDiv, 'div');
 						// Save inputs for later (Mmmm, memory leak)
-						levelObj.input = bindNewElt(levelFieldRow, 'input');
-						levelObj.label = bindNewElt(levelFieldRow, 'label');
+						levelObj.input = bindNewElt(levelToggleDiv, 'input');
+						levelObj.label = bindNewElt(levelToggleDiv, 'label');
 					}
 				// Category fieldset
 var     categoryFieldset = bindNewElt(body, 'fieldset');
-				categoryFieldsetObj.fieldset = categoryFieldset;
 var				categoryLegend = bindNewElt(categoryFieldset, 'legend'),
 						categoryLegendSpanPreU = bindNewElt(categoryLegend, 'span');
 						categoryFieldsetObj.u = bindNewElt(categoryLegend, 'u');
 						categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span');
-var				categorySpan = bindNewElt(categoryFieldset, 'span'),
-					categoryFieldRow;
+var				categoryToggleDiv = bindNewElt(categoryFieldset, 'div');
+					categoryFieldsetObj.toggleDiv = categoryToggleDiv;
+var					categorySpan = bindNewElt(categoryToggleDiv, 'span'),
+						categoryFieldRow;
 					for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
 						categoryObj = categoryObjArr[i];
-						categoryFieldRow = bindNewElt(categoryFieldset, 'div');
-						categoryObj.input = bindNewElt(categoryFieldRow, 'input');
-						categoryObj.label = bindNewElt(categoryFieldRow, 'label');
+						categoryFieldRow = bindNewElt(categoryToggleDiv, 'div');
+						categoryObj.input = bindNewElt(categoryToggleDiv, 'input');
+						categoryObj.label = bindNewElt(categoryToggleDiv, 'label');
 					}
 					// TODO: Add in Add All/ DoC All / Rem All buttons
 				// TODO: Skip unsubscribed friends
@@ -199,9 +201,18 @@ setStyle( header, 'border-bottom: 1px solid #000; ' + paddingContainerChildren);
 setStyle( body, paddingContainerChildren);
 	// Level fieldset
 	function getFieldsetStyleFn(fieldsetObj) {
+		var toggleDiv = fieldsetObj.toggleDiv;
 		setStyle( fieldsetObj.u, 'cursor: pointer' );
 		return function () {
-			// TODO: Figure out hiding/not hiding
+			var state = fieldsetObj.state,
+					style = '';
+
+			if( !state ) {
+				style = 'display: none';
+			}
+
+			// TODO: Use a pre-existing class instead
+			setStyle(toggleDiv, style);
 		}
 	}
 	levelFieldsetObj.styleFn = exec( getFieldsetStyleFn(levelFieldsetObj) );
