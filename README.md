@@ -16,6 +16,4 @@ Tested and functional in
 
 TODO
 ====
-
-- Make unsubscribed friends stay unsubscribed
 - Allow for unsubscribe all (I don't know who would)

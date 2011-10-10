@@ -90,19 +90,21 @@ return function (callback) {
 }());
 
 // Async scraper
-function grabAllSubscriptions(callback) {
+function grabAllSubscriptions(fns) {
 	var body = document.body,
 			UIBlocks = DOM.scry( body, '.UIImageBlock_Entity' ),
 			UIBlock,
 			UIBlockIndex = 0,
 			UIBlockLen = UIBlocks.length,
 			profiles = [],
-			profile,
 			rowIdentifier,
-			checkedRegex = /(^|\s)\s*checked\s*(\s|$)/;
+			checkedRegex = /(^|\s)\s*checked\s*(\s|$)/,
+			eachFn = fns.eachFn || noop,
+			callback = fns.callback || noop;
 
 	function scrapeProfiles() {
-		var UIBlockCounter = 4;
+		var UIBlockCounter = 4,
+				profile;
 
 		for( ; UIBlockCounter--; UIBlockIndex++ ) {
 			// If we have gone through all the blocks, callback
@@ -123,6 +125,8 @@ function grabAllSubscriptions(callback) {
 			rowIdentifier = 'Row ' + UIBlockIndex;
 
 			try {
+				eachFn(UIBlockIndex, UIBlock);
+
 				var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
 						a = DOM.find(contentBlock, 'a'),
 						profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
@@ -142,9 +146,8 @@ function grabAllSubscriptions(callback) {
 				);
 
 				// Generate checks (this is a slow DOM touch/repaint trigger; I would love to speed it up)
-				var content = document.getElementById('subscriptionFlyoutContent');
+				var content = DOM.scry(document.body, '.FlyoutSubscriptionMenu').pop();
 				EditSubscriptions.init(content, profileId, 3);
-
 
 				// Grab the menu items
 				var menuItems = DOM.scry(body, '.SubscriptionMenuItem'),
@@ -156,7 +159,7 @@ function grabAllSubscriptions(callback) {
 				for( i = menuItems.length; i--; ) {
 					menuItem = menuItems[i];
 
-					// Remove the hidden overlays
+					// Skip the hidden overlays
 					if( Parent.byClass(menuItem, 'hidden_elem') ) {
 						continue;
 					}
@@ -231,9 +234,12 @@ var setAllSubscriptions = function (profiles, callback) {
 			if( !profile ) {
 				callback = callback || noop;
 				callback();
+
+				// Overwrite to prevent multiple calls
+				callback = noop;
 				return;
 			}
-			
+
 			// TODO: Build out unsubscribeAll
 			// {location: 13, profile_id} url: /ajax/follow/unfollow_profile.php
 
@@ -306,15 +312,47 @@ var setAllSubscriptions = function (profiles, callback) {
 return setAllSubscriptions;
 }
 
+function updateStatus(msg) {
+	// body.innerHTML = msg;
+	console.log(msg);
+}
+
+/** BEGIN PATCH FOR WRONG PAGE **/
+var pageQueryString = location.search || '';
+if( !pageQueryString.match(/sk=subscribedto/) || !pageQueryString.match(/filter=1/) ) {
+	updateStatus('You are not on the correct page.<br/>Click the link below to go to the correct page.<br/>From there, reload this script.<br/><br/><a href="http://www.facebook.com/profile.php?sk=subscribedto&filter=1">http://www.facebook.com/profile.php?sk=subscribedto&filter=1</a>');
+	return;
+}
+/** END PATCH FOR WRONG PAGE **/
+
 // Start us off (this will be the injection point)
+updateStatus('Scrolling profiles...');
 scrollFriendsAsync( function () {
-	grabAllSubscriptions(
-		setAllSubscriptionsGenerator(
-			{ 'subscribeLevel': 'Most Important',
-				'categories': {'Life Events': true} },
-			{ 'skipUnsubscribed': true }
-		)
-	);
+	updateStatus('Collecting subscriptions...');
+
+	var body = document.body,
+			UIBlocksLen = DOM.scry( body, '.UIImageBlock_Entity' ).length;
+
+	grabAllSubscriptions({
+		'eachFn': function (index, elt) {
+			updateStatus('Collecting subscriptions (' + index + '/' + UIBlocksLen + ')');
+		},
+		'callback': function (profiles) {
+			updateStatus('Updating subscriptions...');
+			var setAllSubscriptions = setAllSubscriptionsGenerator(
+					{ 'categories': {'Life Events': true} },
+					{ 'skipUnsubscribed': true }
+				);
+
+			setAllSubscriptions(profiles, function () {
+				updateStatus('Waiting for changes to complete.');
+				setTimeout( function () {
+					updateStatus('Refreshing your browser.<br/>You should see changes once the page reloads.<br/>Thank you and have a nice day!');
+					location.reload();
+				}, 5000 );
+			});
+		}
+	});
 } );
 
 }());

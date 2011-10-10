@@ -1,13 +1,9 @@
 // Don't want to pollute Facebook namespace ;)
+(function(d){
+/** BEGIN: SUBSCRIBER.JS **/
 
-(function(){
-var UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' ),
-		UIBlockLen = 0,
-    finalUIBlock,
-    dataKeys = ['Other Activity', 'Music and Videos', 'Comments and Likes', 'Games', 'Photos', 'Status Updates', 'Life Events', 'Only Important', 'Most Updates', 'All Updates'],
-		inputSubscribeLevel = 'All Updates',
-		inputWatchLevels = ['Life Events'],
-		failedRows = [];
+var failedRows = [],
+		noop = function(){};
 
 // Grabbed from http://github.com/Ensighten/CSS-Query/blob/master/src/cssQuery.js
 var getDisplay = (function (win) {
@@ -36,21 +32,32 @@ var getDisplay = (function (win) {
 	};
 }(window));
 
-function init(subscribeLevel, watchLevels) {
-	inputSubscribeLevel = subscribeLevel;
-	inputWatchLevels = watchLevels;
-	dataKeys = watchLevels.concat([subscribeLevel]);
-	scrollFriendsAsync();
+// Helper function for passing functions
+function regenFn(fn, aArgs) {
+	var args = [].concat.apply([], aArgs);
+	return function () {
+		fn.apply(this, args);
+	};
 }
 
-// Scroll through all profiles
-function scrollFriendsAsync() {
+// Function to scroll through all profiles (asynchronously) ;)
+var scrollFriendsAsync = (function(){
+// Set up privatized variables
+var UIBlocks = [],
+		UIBlockLen = -1,
+    finalUIBlock,
+		body = document.body;
+
+return function (callback) {
+	var args = arguments;
+
+	// Set up callback function for self
 	function callbackSelf() {
-		setTimeout( scrollFriendsAsync, 1000 );
+		setTimeout( regenFn(scrollFriendsAsync, args), 1000 );
 	}
 
 	// Ensure that the remaining profiles are done loading
-	var UIPageLoader = DOM.find(document.body, '.uiMorePagerLoader');
+	var UIPageLoader = DOM.find(body, '.uiMorePagerLoader');
 	if( UIPageLoader && getDisplay( UIPageLoader ) !== 'none' ) {
 		callbackSelf();
 		return;
@@ -58,314 +65,733 @@ function scrollFriendsAsync() {
 
 	// If condition is met, fire the callback and leave
 	if( UIBlockLen === UIBlocks.length ) {
-		autoSubscribeBody.innerHTML = 'Updating all subscriptions (your browser may freeze for a second)';
-		setTimeout( setAllSubscriptions, 100 );
+		// Fallback in case no callback is supplied
+		callback = callback || noop;
+		callback();
 		return;
 	}
 
+	// Save the new length and grab all the blocks once more
 	UIBlockLen = UIBlocks.length;
 	UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' );
 
 	// Make sure the last element isn't hidden
-	finalUIBlock = UIBlocks.pop();;
-	while( Parent.byClass(finalUIBlock, 'hidden_elem') ) {
+	do {
 		finalUIBlock = UIBlocks.pop();
-	}
+	} while( finalUIBlock && getDisplay( finalUIBlock ) === 'none' );
 
-	// Scroll to it
+	// Scroll to the last non-hidden element
+	// We could use finalUIBlock.scrollIntoView (native JS) but this is so much prettier; thanks Facebook!
 	DOMScroll.scrollTo( finalUIBlock );
 
-	// Wait for profiles to load
+	// Wait for new profiles to load
 	callbackSelf();
-}
+};
 
-function setAllSubscriptions() {
-	var UIBlocks = DOM.scry( document.body,'.UIImageBlock_Entity' ),
-			UIBlockIndex,
-			UIBlockLen;
-	for( UIBlockIndex = 0, UIBlockLen = UIBlocks.length; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
-	// for( UIBlockIndex = 0, UIBlockLen = 1; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
-		UIBlock = UIBlocks[UIBlockIndex];
-		rowIdentifier = 'Row ' + UIBlockIndex;
+}());
 
-		try {
-			var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
-					a = DOM.find(contentBlock, 'a'),
-					profileId;
+// Async scraper
+function grabAllSubscriptions(fns) {
+	var body = document.body,
+			UIBlocks = DOM.scry( body, '.UIImageBlock_Entity' ),
+			UIBlock,
+			UIBlockIndex = 0,
+			UIBlockLen = UIBlocks.length,
+			profiles = [],
+			rowIdentifier,
+			checkedRegex = /(^|\s)\s*checked\s*(\s|$)/,
+			eachFn = fns.eachFn || noop,
+			callback = fns.callback || noop;
 
-			rowIdentifier = a.innerHTML;
-			profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
+	function scrapeProfiles() {
+		var UIBlockCounter = 4,
+				profile;
 
-			SubscriptionFlyoutController.show(
-				DOM.find(UIBlock, '.subscribeButtonsContainer')
-			);
+		for( ; UIBlockCounter--; UIBlockIndex++ ) {
+			// If we have gone through all the blocks, callback
+			if( UIBlockIndex >= UIBlockLen ) {
+				// Spit out errors
+				if( failedRows.length > 0 ) {
+					alert( 'Errors occurred with:\n' + failedRows.join('\n') );
+				}
 
-			var menuItems = document.getElementsByName('subscription_id'),
-					i,
-					dataObj = {};
+				// Callback with profiles
+				callback = callback || noop;
+				callback(profiles);
+				return;
+			}
 
-			for( i = menuItems.length; i--; ) {
+			// Grab current block
+			UIBlock = UIBlocks[UIBlockIndex];
+			rowIdentifier = 'Row ' + UIBlockIndex;
+
+			try {
+				eachFn(UIBlockIndex, UIBlock);
+
+				var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
+						a = DOM.find(contentBlock, 'a'),
+						profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
+
+				// TODO: Make .find's and such more defensive
+
+				rowIdentifier = a.innerHTML;
+
+				// Grab subscribed status and profile id
+				profile = {
+					'subscribed': !DOM.find(UIBlock, '.subscribedButton').className.match(/hidden_elem/),
+					'id': profileId };
+
+				// Show the profile options
+				SubscriptionFlyoutController.show(
+					DOM.find(UIBlock, '.subscribeButtonsContainer')
+				);
+
+				// Generate checks (this is a slow DOM touch/repaint trigger; I would love to speed it up)
+				var content = DOM.scry(document.body, '.FlyoutSubscriptionMenu').pop();
+				EditSubscriptions.init(content, profileId, 3);
+
+				// Grab the menu items
+				var menuItems = DOM.scry(body, '.SubscriptionMenuItem'),
+						menuItem,
+						menuText,
+						i;
+
+				// Get values of each item
+				for( i = menuItems.length; i--; ) {
 					menuItem = menuItems[i];
-					menuHTML = menuItem.parentNode.innerHTML;
-					for( j = dataKeys.length; j--; ) {
-							dataKey = dataKeys[j];
-							if( menuHTML.match(dataKey) ) {
-									dataObj[dataKey] = menuItem.value;
-							}
+
+					// Skip the hidden overlays
+					if( Parent.byClass(menuItem, 'hidden_elem') ) {
+						continue;
 					}
+
+					menuText = DOM.getText(menuItem);
+
+					// Store item to profile
+					profile[menuText] = {
+						'chk': !!menuItem.className.match(checkedRegex),
+						'val': DOM.find(menuItem, 'input').value
+					};
+				}
+
+				// Add to return array
+				profiles.push(profile);
+			} catch(e) {
+				// Push to error stack
+				failedRows.push( rowIdentifier );
 			}
-
-			var subscribeLevel = dataObj[ inputSubscribeLevel ];
-			categories = [];
-			for( i = 0, len = inputWatchLevels.length; i < len; i++ ) {
-				categories.push( dataObj[ inputWatchLevels[i] ] );
-			}
-
-			var ajaxObj = {
-					profile_id: profileId,
-					level: subscribeLevel,
-					custom_categories: categories,
-					location: 3 // No idea what this means (I would guess URL)
-			};
-			new AsyncRequest().setURI('/ajax/follow/manage_subscriptions.php').setData(ajaxObj).send();
-
-		} catch(e) {
-			// TODO: Spit out errors
-			failedRows.push( rowIdentifier );
 		}
+
+		// Async do-again in 100ms
+		setTimeout(scrapeProfiles, 100);
 	}
-	
-	autoSubscribeBody.innerHTML = 'Waiting for changes to complete.';
-	setTimeout( function () {
-		autoSubscribeBody.innerHTML = 'Refreshing your browser.<br/>You should see changes once the page reloads.<br/>Thank you and have a nice day!';
-		location.reload();
-	}, 5000 );
+
+	// Begin more async
+	scrapeProfiles();
 }
 
-// Build container
-var d = document,
-		c = 'createElement',
-		autoSubscribeBox = d[c]('div');
+/**
+ * @param {Object} inputs Container object for inputs
+ * @param {String} inputs.subscribeLevel Subscription level (All Updates, Most Updates, Only Important)
+ * @param {Object} inputs.categories Levels to watch (Keys: Comments and Likes, Games, Life Events, Music and Videos, Other Activity, Photos, Status Updates)
+ * @param {Boolean} inputs.categories.key If true, check item. If false, uncheck item. If never specified, use default.
+ * @param {Object} [options] Options object
+ * @param {Boolean} [skipUnsubscribed] Skip all unsubscribed persons
+ * @param {Boolean} [unsubscribeAll] Unsubscribe all of your friends // TODO: Build into special alt popup
+ * @param {Integer} [concurrentRequests] Amount of XHR to run at the same time. This will fallback to 8.
+ */
+function setAllSubscriptionsGenerator(inputs, options) {
+// Fallback for options
+inputs = inputs || { 'categories': {} };
+options = options || {};
 
+// Localize inputs
+var inputSubscribeLevel = inputs.subscribeLevel || '',
+    inputCategories = inputs.categories || {},
+// Localize options
+    skipUnsubscribed = options.skipUnsubscribed,
+    unsubscribeAll = options.unsubscribeAll,
+    concurrentRequests = options.concurrentRequests || 8,
+// Set up constants
+		possibleSubscribeLevels = ['All Updates', 'Most Updates', 'Only Important'],
+		possibleSubscribeLevel,
+		possibleCategories = ['Comments and Likes', 'Games', 'Life Events', 'Music and Videos', 'Other Activity', 'Photos', 'Status Updates'],
+		possibleCategory;
+
+var setAllSubscriptions = function (profiles, callback) {
+		// TODO: Relocalize all options
+
+		// Personal choice to reverse profiles (top down is preferred)
+		profiles.reverse();
+
+		function fireNextReq() {
+			var profile = profiles.pop(),
+					profileSubscribeLevel,
+					categories = [],
+					category,
+					i,
+					xhrData;
+
+			if( !profile ) {
+				callback = callback || noop;
+				callback();
+
+				// Overwrite to prevent multiple calls
+				callback = noop;
+				return;
+			}
+
+			// TODO: Build out unsubscribeAll
+			// {location: 13, profile_id} url: /ajax/follow/unfollow_profile.php
+
+			// Skip if profile should be skipped
+			if( skipUnsubscribed && !profile.subscribed ) {
+				fireNextReq();
+				retrun;
+			}
+
+			// Use the given subscribe level
+			possibleSubscribeLevel = profile[inputSubscribeLevel];
+
+			// If there is none, find the current one for this profile
+			if( !possibleSubscribeLevel ) {
+				// Iterate possible values
+				for( i = possibleSubscribeLevels.length; i--; ) {
+					// Localize posible value
+					possibleSubscribeLevel = profile[ possibleSubscribeLevels[i] ];
+
+					// If it is set, use it
+					if( possibleSubscribeLevel.chk ) {
+						break;
+					}
+				}
+			}
+			// Use the subscribe level
+			subscribeLevel = possibleSubscribeLevel.val;
+
+			// Check each category
+			for( i = possibleCategories.length; i--; ) {
+				possibleCategory = possibleCategories[i];
+
+				// If user-specified, use what they chose
+				if( inputCategories.hasOwnProperty(possibleCategory) ) {
+					// Use it if true
+					if( inputCategories[possibleCategory] ) {
+						categories.push( profile[possibleCategory].val );
+					}
+				// Otherwise, use the current value
+				} else {
+					// Localize object
+					category = profile[possibleCategory];
+					// If checked, use it
+					if( category.chk ) {
+						categories.push( category.val );
+					}
+				}
+			}
+
+			var xhrData = {
+						profile_id: profile.id,
+						level: subscribeLevel,
+						custom_categories: categories,
+						location: 3 // No idea what this means (I would guess URL)
+					},
+					xhr = new AsyncRequest('/ajax/follow/manage_subscriptions.php');
+
+			xhr.setData(xhrData);
+			// Send next request
+			xhr.finallyHandler = fireNextReq;
+			xhr.send();
+		}
+
+		var i = concurrentRequests;
+		for( ; i--; ) {
+			fireNextReq();
+		}
+};
+
+return setAllSubscriptions;
+}
+
+function updateStatus(msg) {
+	body.innerHTML = msg;
+	// console.log(msg);
+}
+
+/** END: SUBSCRIBER.JS **/
+/** BEGIN: POPUP.JS **/
+
+// Localize document and simplify element creation
+var c = 'createElement',
+		// Helper function for creating a element
+		crElt = function (eltName) {
+			return d[c](eltName);
+		},
+		// Helper function for HTML structuring
+		bindNewElt = function (container, eltName) {
+			var elt = crElt(eltName);
+			container.appendChild(elt);
+			return elt;
+		};
+
+// Helper function for setting style on elements
 function setStyle(node, css) {
 	node.setAttribute('style', css);
 }
 
-// It's over 9000!!
-setStyle( autoSubscribeBox, 'z-index: 9001; border: 1px solid #000; width: 300px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF; ' );
+// Helper function for setting attributes on elements
+function setAttributes( node, attrObj ) {
+	var key;
+	for( key in attrObj ) {
+		if( attrObj.hasOwnProperty(key) ) {
+			node.setAttribute(key, attrObj[key]);
+		}
+	}
+}
 
-// Build and append second level
-var autoSubscribeHeader = d[c]('div'),
-		autoSubscribeBody = d[c]('div');
-setStyle( autoSubscribeHeader, 'border-bottom: 1px solid #000; padding: .2em .3em;');
-setStyle( autoSubscribeBody, 'padding: .2em .3em;');
-autoSubscribeBox.appendChild(autoSubscribeHeader);
-autoSubscribeBox.appendChild(autoSubscribeBody);
+// Helper function to run and return a function
+function exec(fn) {
+	fn();
+	return fn;
+}
 
-// Fill in header
-var autoSubscribeHeaderText = d[c]('div'),
-		autoSubscribeCloseButton = d[c]('div');
-setStyle( autoSubscribeHeaderText, 'display: inline' );
-autoSubscribeHeaderText.innerHTML = 'Auto Subscriber';
-setStyle( autoSubscribeCloseButton, 'border: 1px solid #000; cursor: pointer; font-family: monospace; width: 1.1em; height: 1.2em; text-align: center; float: right; background: pink;' );
-autoSubscribeCloseButton.innerHTML = 'x';
-autoSubscribeHeader.appendChild(autoSubscribeHeaderText);
-autoSubscribeHeader.appendChild(autoSubscribeCloseButton);
-
-// Body description
-var autoSubscribeDescription = d[c]('div'),
-		autoSubscribeDescriptionBr = d[c]('br');
-
-autoSubscribeDescription.innerHTML = "The settings below will set <strong>all</strong> of your friends to the same subscription format. Click 'Change All Subscriptions' once you are ready.";
-autoSubscribeBody.appendChild(autoSubscribeDescription);
-autoSubscribeBody.appendChild(autoSubscribeDescriptionBr);
-
-// Update level fieldset
-var autoSubscribeUpdateLevelFieldset = d[c]('fieldset'),
-		autoSubscribeUpdateLevelLegend = d[c]('legend'),
-		autoSubscribeUpdateLevelBr = d[c]('br'),
-		// DRY is awesome
-		updateLevels = [
-			{
-				'value': 'All Updates',
-			}, {
-				'value': 'Most Updates',
-				'checked': 1
-			}, {
-				'value': 'Only Important'
-			}],
-		updateLevel,
-		autoSubscribeUpdateLevelRow,
-		autoSubscribeUpdateLevelInput,
-		autoSubscribeUpdateLevelLabel,
+/** BEGIN DRY PREP DATA **/
+var i,
+		len,
+		levelFieldsetObj =
+			{ 'state': 1 },
+		levelObjArr = [
+			{ 'value': 'All Updates' },
+			{ 'value': 'Most Updates',
+				'checked': 1 },
+			{	'value': 'Only Important' }
+		],
+		levelObj,
+		input,
+		label,
 		key,
-		value,
-		i,
-		len;
+		val,
+		categoryFieldsetObj =	{ 'state': 1 },
+		categoryObjArr = [
+			{	'value': 'Life Events',
+				'state': 1 },
+			{	'value': 'Status Updates',
+				'state': 1	},
+			{	'value': 'Photos',
+				'state': 1	},
+			{	'value': 'Games',
+				'state': 1	},
+			{	'value': 'Comments and Likes',
+				'state': 1	},
+			{	'value': 'Music and Videos',
+				'state': 1	},
+			{	'value': 'Other Activity',
+				'state': 1	}
+		],
+		categoryObj,
+		optionsSkipUnsubscribedObj = {};
+/** END DRY PREP DATA **/
 
-autoSubscribeUpdateLevelLegend.innerHTML = 'How many updates?';
-autoSubscribeUpdateLevelFieldset.appendChild(autoSubscribeUpdateLevelLegend);
+/** BEGIN GENERATE HTML FOR CONTAINER **/
+var container = crElt('div'),
+			header = bindNewElt(container, 'div'),
+				headerTitle = bindNewElt(header, 'div'),
+				closeButton = bindNewElt(header, 'div'),
+			body = bindNewElt(container, 'div'),
+				// Description
+				bodyDescription = bindNewElt(body, 'div'),
+				bodyDescriptionBr = bindNewElt(body, 'br'),
+				// Level fieldset
+				levelFieldset = bindNewElt(body, 'fieldset'),
+   				levelLegend = bindNewElt(levelFieldset, 'legend'),
+						levelLegendSpanPreU = bindNewElt(levelLegend, 'span');
+						levelFieldsetObj.u = bindNewElt(levelLegend, 'u');
+var					levelLegendSpanPostU = bindNewElt(levelLegend, 'span'),
+   				levelFieldRow,
+					levelToggleDiv = bindNewElt(levelFieldset, 'div');
+					levelFieldsetObj.toggleDiv = levelToggleDiv;
+					for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+						levelObj = levelObjArr[i];
+						levelFieldRow = bindNewElt(levelToggleDiv, 'div');
+						// Save inputs for later (Mmmm, memory leak)
+						levelObj.input = bindNewElt(levelToggleDiv, 'input');
+						levelObj.label = bindNewElt(levelToggleDiv, 'label');
+					}
+				// Category fieldset
+var     categoryFieldset = bindNewElt(body, 'fieldset'),
+   				categoryLegend = bindNewElt(categoryFieldset, 'legend'),
+						categoryLegendSpanPreU = bindNewElt(categoryLegend, 'span');
+						categoryFieldsetObj.u = bindNewElt(categoryLegend, 'u');
+var					categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span'),
+   				categoryToggleDiv = bindNewElt(categoryFieldset, 'div');
+					categoryFieldsetObj.toggleDiv = categoryToggleDiv;
+var					categorySpan = bindNewElt(categoryToggleDiv, 'span'),
+						categoryFieldRow;
+					for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+						categoryObj = categoryObjArr[i];
+						categoryFieldRow = bindNewElt(categoryToggleDiv, 'div');
+						categoryObj.input = bindNewElt(categoryToggleDiv, 'input');
+						categoryObj.label = bindNewElt(categoryToggleDiv, 'label');
+					}
+					// TODO: Add in Add All/ DoC All / Rem All buttons
+				// Skip unsubscribed friends
+var			optionsFieldset = bindNewElt(body, 'fieldset'),
+					optionsLegend = bindNewElt(optionsFieldset, 'legend');
+					optionsSkipUnsubscribedObj.input = bindNewElt(optionsFieldset, 'input');
+					optionsSkipUnsubscribedObj.label = bindNewElt(optionsFieldset, 'label');
+				// Submit Container
+var			submitContainer = bindNewElt(body, 'div'),
+					submitButton = bindNewElt(submitContainer, 'input');
+/** END GENERATE HTML FOR CONTAINER **/
 
-// Iterate the updateLevels and append to fieldset
-for( i = 0, len = updateLevels.length; i < len; i++ ) {
-	updateLevel = updateLevels[i];
-	key = 'autoSubscribeUpdateLevel' + i;
-	value = updateLevel.value;
+/** BEGIN FILL IN CONTENT **/
+// Header
+	headerTitle.innerHTML = 'Auto Subscriber';
+	closeButton.innerHTML = 'x';
+// Body
+	// Body description
+	bodyDescription.innerHTML = "The settings below will set all of your current friend subscriptions to the same. Click 'Change All Subscriptions' once you are ready.";
+	// Level fieldset
+		function getFieldsetHtmlFn(fieldsetObj) {
+			return function () {
+				var state = fieldsetObj.state,
+						html = 'Use/Ignore this section',
+						u = fieldsetObj.u,
+						uReplaceFn = function (text, index) { return '<b>' + text + '</b>'; };
 
-	autoSubscribeUpdateLevelRow = d[c]('div');
+				if( state ) {
+					u.innerHTML = html.replace('Use', uReplaceFn );
+				} else {
+					u.innerHTML = html.replace('Ignore', uReplaceFn );
+				}
+			}
+		}
 
-	autoSubscribeUpdateLevelInput = d[c]('input');
-	autoSubscribeUpdateLevelInput.type = 'radio';
-	autoSubscribeUpdateLevelInput.id = key;
-	autoSubscribeUpdateLevelInput.name = 'autoSubscribeUpdateLevel';
-	if( updateLevel.checked ) {
-		autoSubscribeUpdateLevelInput.checked = 'checked';
-	}
-	autoSubscribeUpdateLevelInput.value = value;
+		levelLegendSpanPreU.innerHTML = 'How many updates? (';
+		levelLegendSpanPostU.innerHTML = ')';
+		levelFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(levelFieldsetObj) );
 
-	autoSubscribeUpdateLevelLabel = d[c]('label');
-	autoSubscribeUpdateLevelLabel.setAttribute('for', key);
-	autoSubscribeUpdateLevelLabel.innerHTML = value;
+		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+			levelObj = levelObjArr[i];
+			levelObj.input.type = 'radio';
+			levelObj.label.innerHTML = levelObj.value;
+		}
 
-	autoSubscribeUpdateLevelRow.appendChild(autoSubscribeUpdateLevelInput);
-	autoSubscribeUpdateLevelRow.appendChild(autoSubscribeUpdateLevelLabel);
-	autoSubscribeUpdateLevelFieldset.appendChild(autoSubscribeUpdateLevelRow);
+	// Category fieldset
+		categoryLegendSpanPreU.innerHTML = 'What types of updates? (';
+		categoryLegendSpanPostU.innerHTML = ')';
+		categoryFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(categoryFieldsetObj) );
+		categorySpan.innerHTML = '&nbsp;// <b>Rem</b> = \'Remove from feed\';<br/>&nbsp;// <b>DoC</b> = \'Don\'t Change\'; <b>Add</b> = \'Add to feed\';';
 
-	// Save inputs for later (Mmmm, memory leak)
-	updateLevel.input = autoSubscribeUpdateLevelInput;
-}
+		function getCategoryHTMLFn(categoryObj) {
+			var labelHTML = '(Rem/DoC/Add) ' + categoryObj.value;
+			return function () {
+				var label = categoryObj.label,
+						labelReplaceFn = function (text, index) { return '<b>' + text + '</b>'; },
+						state = categoryObj.state;
 
-autoSubscribeBody.appendChild(autoSubscribeUpdateLevelFieldset);
-autoSubscribeBody.appendChild(autoSubscribeUpdateLevelBr);
+				// -1 will be remove item from feed
+				if( state === -1 ) {
+					label.innerHTML = labelHTML.replace('Rem', labelReplaceFn);
+				// 0 will be don't change
+				} else if ( state === 0 ) {
+					label.innerHTML = labelHTML.replace('DoC', labelReplaceFn);
+				// 1 will be add item to feed
+				} else {
+					label.innerHTML = labelHTML.replace('Add', labelReplaceFn);
+				}
+			};
+		}
 
-// Category fieldset
-var autoSubscribeCategoryFieldset = d[c]('fieldset'),
-		autoSubscribeCategoryLegend = d[c]('legend'),
-		autoSubscribeCategoryBr = d[c]('br'),
-		// DRY is awesome
-		categories = [
-			{
-				'value': 'Life Events',
-				'checked': 1
-			}, {
-				'value': 'Status Updates',
-				'checked': 1
-			}, {
-				'value': 'Photos',
-				'checked': 1
-			}, {
-				'value': 'Games',
-				'checked': 1
-			}, {
-				'value': 'Comments and Likes',
-				'checked': 1
-			}, {
-				'value': 'Music and Videos',
-				'checked': 1
-			}, {
-				'value': 'Other Activity',
-				'checked': 1
-			}],
-		category,
-		autoSubscribeCategoryRow,
-		autoSubscribeCategoryInput,
-		autoSubscribeCategoryLabel;
+		for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+			categoryObj = categoryObjArr[i];
+			categoryObj.input.type = 'checkbox';
+			categoryObj.htmlFn = exec( getCategoryHTMLFn(categoryObj) );
+		}
 
-autoSubscribeCategoryLegend.innerHTML = 'What types of updates?';
-autoSubscribeCategoryFieldset.appendChild(autoSubscribeCategoryLegend);
+	// Options fieldset
+		optionsLegend.innerHTML = 'Options';
+		optionsSkipUnsubscribedObj.input.type = 'checkbox';
+		optionsSkipUnsubscribedObj.label.innerHTML = 'Skip unsubscribed friends';
+	// Submit container
+		submitButton.type = 'button';
+		submitButton.value = 'Change All Subscriptions';
 
-// Same as before
-for( i = 0, len = categories.length; i < len; i++ ) {
-	category = categories[i];
-	key = 'autoSubscribeCategory' + i;
-	value = category.value;
+/** END FILL IN CONTENT **/
 
-	autoSubscribeCategoryRow = d[c]('div');
+/** BEGIN STYLING CONTAINER **/
+// Make it a popup with style (It's over 9000!!)
+setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 300px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF;' );
 
-	autoSubscribeCategoryInput = d[c]('input');
-	autoSubscribeCategoryInput.type = 'checkbox';
-	autoSubscribeCategoryInput.id = key;
-	autoSubscribeCategoryInput.name = key;
-	if( category.checked ) {
-		autoSubscribeCategoryInput.checked = 'checked';
-	}
-	autoSubscribeCategoryInput.value = value;
+// Header
+var paddingContainerChildren = 'padding: .2em .3em;';
+setStyle( header, 'border-bottom: 1px solid #000; ' + paddingContainerChildren);
+	setStyle( headerTitle, 'display: inline' );
+	setStyle( closeButton, 'border: 1px solid #000; cursor: pointer; font-family: monospace; width: 1.1em; height: 1.2em; text-align: center; float: right; background: pink;' );
+// Body
+setStyle( body, paddingContainerChildren);
+	// Level fieldset
+	function getFieldsetStyleFn(fieldsetObj) {
+		var toggleDiv = fieldsetObj.toggleDiv;
+		setStyle( fieldsetObj.u, 'cursor: pointer' );
+		return function () {
+			var state = fieldsetObj.state,
+					style = '';
 
-	autoSubscribeCategoryLabel = d[c]('label');
-	autoSubscribeCategoryLabel.setAttribute('for', key);
-	autoSubscribeCategoryLabel.innerHTML = value;
+			if( !state ) {
+				style = 'display: none';
+			}
 
-	autoSubscribeCategoryRow.appendChild(autoSubscribeCategoryInput);
-	autoSubscribeCategoryRow.appendChild(autoSubscribeCategoryLabel);
-	autoSubscribeCategoryFieldset.appendChild(autoSubscribeCategoryRow);
-
-	// Save inputs for later (Mmmm, memory leak)
-	category.input = autoSubscribeCategoryInput;
-}
-
-autoSubscribeBody.appendChild(autoSubscribeCategoryFieldset);
-autoSubscribeBody.appendChild(autoSubscribeCategoryBr);
-
-// Submit button
-var autoSubscribeSubmitContainer = d[c]('div'),
-		autoSubscribeSubmitButton = d[c]('input');
-autoSubscribeSubmitButton.type = 'button';
-autoSubscribeSubmitButton.value = 'Change All Subscriptions';
-setStyle( autoSubscribeSubmitContainer, 'text-align: right;' );
-setStyle( autoSubscribeSubmitButton, 'cursor: pointer;' );
-autoSubscribeSubmitContainer.appendChild(autoSubscribeSubmitButton);
-autoSubscribeBody.appendChild(autoSubscribeSubmitContainer);
-
-d.body.appendChild(autoSubscribeBox);
-
-// Hook in events for close button and 'Change All Subscriptions'
-autoSubscribeCloseButton.onclick = function () {
-	d.body.removeChild(autoSubscribeBox);
-};
-
-autoSubscribeSubmitButton.onclick = function () {
-	var i,
-			len;
-
-	var $updateLevels = updateLevels,
-			updateLevel,
-			inputUpdateLevel = '';
-
-	for( i = 0, len = $updateLevels.length; i < len; i++ ) {
-		updateLevel = $updateLevels[i];
-
-		if( updateLevel.input.checked ) {
-			inputUpdateLevel = updateLevel.value;
-			break;
+			// TODO: Use a pre-existing class instead
+			setStyle(toggleDiv, style);
+			
+			var i,
+					state;
+			// Bolden selection
+			for( i = levelObjArr.length; i--; ) {
+				levelObj = levelObjArr[i];
+				state = levelObj.input.checked;
+				setStyle( levelObj.label, state ? '' : 'font-weight: normal;' );
+			}
 		}
 	}
-
-			// Localize categories
-	var $categories = categories,
-			category,
-			inputCategories = [];
-
-	for( i = 0, len = $categories.length; i < len; i++ ) {
-		category = $categories[i];
-
-		if( category.input.checked ) {
-			inputCategories.push( category.value );
+	levelFieldsetObj.styleFn = exec( getFieldsetStyleFn(levelFieldsetObj) );
+		// Radio buttons
+		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+			levelObj = levelObjArr[i];
+			levelObj.input.checked = levelObj.checked;
 		}
-	}
+	// Category fieldset
+	categoryFieldsetObj.styleFn = exec( getFieldsetStyleFn(categoryFieldsetObj) );
+		// Checkboxes
+		function getCategoryStyleFn(categoryObj) {
+			return function () {
+				var input = categoryObj.input,
+						state = categoryObj.state;
 
-	autoSubscribeBody.innerHTML = 'Scrolling profiles...';
-	init(inputUpdateLevel, inputCategories);
-};
+				// 0 will be don't change (indeterminate)
+				if( state === 0 ) {
+					input.indeterminate = true;
+					input.checked = false;
+				} else {
+					// -1 will be remove item from feed (unchecked)
+					// 1 will be add item to feed (checked)
+					input.indeterminate = false;
+					input.checked = (state === 1);
+				}
+			};
+		}
+		for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+			categoryObj = categoryObjArr[i];
+			categoryObj.input.type = 'checkbox';
+			setStyle( categoryObj.label, 'font-weight: normal;' );
+			categoryObj.styleFn = exec( getCategoryStyleFn(categoryObj) );
+		}
+	// Options fieldset
+	optionsSkipUnsubscribedObj.input.checked = true;
+	optionsSkipUnsubscribedObj.styleFn = exec( function () {
+		var state = optionsSkipUnsubscribedObj.input.checked;
+		setStyle( optionsSkipUnsubscribedObj.label, state ? '' : 'font-weight: normal;' );
+	} );
+	// Submit container
+	setStyle( submitContainer, 'text-align: right;' );
+		setStyle( submitButton, 'cursor: pointer;' );
+/** END STYLING CONTAINER **/
+
+/** BEGIN FUNCTIONALITY BINDING **/
+// Header
+	closeButton.onclick = function () {
+		d.body.removeChild(container);
+	};
+// Body
+	// Level fieldset
+		// Legend
+		function getFieldsetOnclick(fieldsetObj) {
+			var htmlFn = fieldsetObj.htmlFn,
+			    styleFn = fieldsetObj.styleFn,
+					htmlStyleFn = function () {
+						htmlFn();
+						styleFn();
+					};
+
+			return function () {
+				fieldsetObj.state ^= 1;
+				htmlStyleFn();
+			};
+		}
+		levelFieldsetObj.u.onclick = getFieldsetOnclick(levelFieldsetObj);
+		// Radio buttons
+		for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+			levelObj = levelObjArr[i];
+
+			// Set up a common key so clicks on label can bind to input
+			key = 'autoSubscribeUpdateLevel' + i;
+
+			setAttributes( levelObj.input, {
+					'id': key,
+					'name': 'autoSubscribeUpdateLevel',
+					'value': levelObj.value
+				});
+
+			levelObj.label.setAttribute('for', key);
+			levelObj.input.onclick = levelFieldsetObj.styleFn;
+		}
+	// Category fieldset
+		// Legend
+		categoryFieldsetObj.u.onclick = getFieldsetOnclick(categoryFieldsetObj);
+		// Checkboxes
+		// State function for checkboxes
+		function getCategoryOnclick(categoryObj) {
+			var htmlFn = categoryObj.htmlFn,
+					styleFn = categoryObj.styleFn,
+					htmlStyleFn = function () {
+						htmlFn();
+						styleFn();
+					};
+			return function() {
+				// Get and adjust to new state
+				var state = categoryObj.state + 1;
+
+				// If state is 2, set to -1 (this could be modular logic but I won't)
+				if( state === 2 ) {
+					state = -1;
+				}
+
+				// Save altered state
+				categoryObj.state = state;
+
+				// Change HTML and style object
+				htmlStyleFn();
+			};
+		}
+
+		// Binding portion
+		for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+			categoryObj = categoryObjArr[i];
+			key = 'autoSubscribeCategory' + i;
+			val = categoryObj.value;
+			input = categoryObj.input;
+
+			// Browser-level fuctionality
+			setAttributes( input, {
+				'id': key,
+				'name': key,
+				'value': val } );
+			categoryObj.label.setAttribute('for', key);
+
+			// DOM Level 0 functionality
+			input.onclick = getCategoryOnclick(categoryObj);
+		}
+
+	// Options fieldset
+		val = 'autoSubscribeSkipUnsubscribedFriends';
+		input = optionsSkipUnsubscribedObj.input;
+		setAttributes( input, {
+					'id': val,
+					'name': val,
+					'checked': 'checked'
+				});
+		optionsSkipUnsubscribedObj.label.setAttribute('for', val);
+
+		input.onclick = function () {
+			optionsSkipUnsubscribedObj.styleFn();
+		}
+
+	// Submit container
+		function getLevel(levelObjArr) {
+			var i,
+					len,
+					levelObj,
+					inputLevel = '';
+
+			for( i = 0, len = levelObjArr.length; i < len; i++ ) {
+				levelObj = levelObjArr[i];
+
+				if( levelObj.input.checked ) {
+					inputLevel = levelObj.value;
+					break;
+				}
+			}
+
+			return inputLevel;
+		}
+
+		function getCategories(categoryObjArr) {
+			var	i,
+					len,
+					categoryObj,
+					inputCategories = {};
+
+			for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
+				categoryObj = categoryObjArr[i];
+
+				if( categoryObj.state !== 0 ) {
+					// Performance boost (Zakas)
+					// Use your boost to get through!
+					inputCategories[categoryObj.value] = (categoryObj.state === 1);
+				}
+			}
+
+			return inputCategories;
+		}
+
+		submitButton.onclick = function () { // TODO: Collect info from disables
+			var formData = {},
+					options = { 'skipUnsubscribed': optionsSkipUnsubscribedObj.input.checked };
+			
+			if( levelFieldsetObj.state ) {
+				formData.subscribeLevel = getLevel(levelObjArr);
+			}
+			
+			if( categoryFieldsetObj.state ) {
+				formData.categories = getCategories(categoryObjArr);
+			}
+
+			// Injected =)
+			updateStatus('Scrolling profiles...');
+			scrollFriendsAsync( function () {
+				updateStatus('Collecting subscriptions...');
+
+				var body = document.body,
+						UIBlocksLen = DOM.scry( body, '.UIImageBlock_Entity' ).length;
+
+				grabAllSubscriptions({
+					'eachFn': function (index, elt) {
+						updateStatus('Collecting subscriptions (' + index + '/' + UIBlocksLen + ')');
+					},
+					'callback': function (profiles) {
+						updateStatus('Updating subscriptions...');
+						var setAllSubscriptions = setAllSubscriptionsGenerator(
+								formData,
+								options
+							);
+
+						setAllSubscriptions(profiles, function () {
+							updateStatus('Waiting for changes to complete.');
+							setTimeout( function () {
+								updateStatus('Refreshing your browser.<br/>You should see changes once the page reloads.<br/>Thank you and have a nice day!');
+								location.reload();
+							}, 5000 );
+						});
+					}
+				});
+			} );
+		};
+/** END FUNCTIONALITY BINDING **/
+
+// Expose container to the world
+d.body.appendChild(container);
 
 /** BEGIN PATCH FOR WRONG PAGE **/
 var pageQueryString = location.search || '';
 if( !pageQueryString.match(/sk=subscribedto/) || !pageQueryString.match(/filter=1/) ) {
-	autoSubscribeBody.innerHTML = 'You are not on the correct page.<br/>Click the link below to go to the correct page.<br/>From there, reload this script.<br/><br/><a href="http://www.facebook.com/profile.php?sk=subscribedto&filter=1">http://www.facebook.com/profile.php?sk=subscribedto&filter=1</a>';
+	updateStatus('You are not on the correct page.<br/>Click the link below to go to the correct page.<br/>From there, reload this script.<br/><br/><a href="http://www.facebook.com/profile.php?sk=subscribedto&filter=1">http://www.facebook.com/profile.php?sk=subscribedto&filter=1</a>');
+	return;
 }
-
 /** END PATCH FOR WRONG PAGE **/
 
-// Focus on our element
-autoSubscribeBox.scrollIntoView();
+// TODO: Add checkbox for 'skip unsubscribed friends' but build to handle any callback fn
+// TODO: Move function binding for Rem/DoC/Add down here?
 
-}());
+// TODO: Add in Rem All, DoC All, Add All buttons and bindings
+}(document));
