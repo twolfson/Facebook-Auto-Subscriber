@@ -89,87 +89,101 @@ return function (callback) {
 
 }());
 
-// TODO: Make faster (scrape page better)
+// Async scraper
 function grabAllSubscriptions(callback) {
 	var body = document.body,
 			UIBlocks = DOM.scry( body, '.UIImageBlock_Entity' ),
 			UIBlock,
-			UIBlockIndex,
-			UIBlockLen,
+			UIBlockIndex = 0,
+			UIBlockLen = UIBlocks.length,
 			profiles = [],
 			profile,
 			rowIdentifier,
 			checkedRegex = /(^|\s)\s*checked\s*(\s|$)/;
 
-	for( UIBlockIndex = 0, UIBlockLen = UIBlocks.length; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
-	// for( UIBlockIndex = 0, UIBlockLen = 1; UIBlockIndex < UIBlockLen; UIBlockIndex++ ) {
-		UIBlock = UIBlocks[UIBlockIndex];
-		rowIdentifier = 'Row ' + UIBlockIndex;
+	function scrapeProfiles() {
+		var UIBlockCounter = 4;
 
-		try {
-			var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
-					a = DOM.find(contentBlock, 'a'),
-					profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
-
-			// TODO: Make .find's and such more defensive
-
-			rowIdentifier = a.innerHTML;
-
-			// Grab subscribed status and profile id
-			profile = {
-				'subscribed': !DOM.find(UIBlock, '.subscribedButton').className.match(/hidden_elem/),
-				'id': profileId };
-
-			// Show the profile options
-			SubscriptionFlyoutController.show(
-				DOM.find(UIBlock, '.subscribeButtonsContainer')
-			);
-			
-			// Generate checks (this is a slow DOM touch/repaint trigger; I would love to speed it up)
-			var content = document.getElementById('subscriptionFlyoutContent');
-			EditSubscriptions.init(content, profileId, 3);
-
-
-			// Grab the menu items
-			var menuItems = DOM.scry(body, '.SubscriptionMenuItem'),
-					menuItem,
-					menuText,
-					i;
-
-			// Get values of each item
-			for( i = menuItems.length; i--; ) {
-				menuItem = menuItems[i];
-
-				// Remove the hidden overlays
-				if( Parent.byClass(menuItem, 'hidden_elem') ) {
-					continue;
+		for( ; UIBlockCounter--; UIBlockIndex++ ) {
+			// If we have gone through all the blocks, callback
+			if( UIBlockIndex >= UIBlockLen ) {
+				// Spit out errors
+				if( failedRows.length > 0 ) {
+					alert( 'Errors occurred with:\n' + failedRows.join('\n') );
 				}
 
-				menuText = DOM.getText(menuItem);
-
-				// Store item to profile
-				profile[menuText] = {
-					'chk': !!menuItem.className.match(checkedRegex),
-					'val': DOM.find(menuItem, 'input').value
-				};
+				// Callback with profiles
+				callback = callback || noop;
+				callback(profiles);
+				return;
 			}
 
-			// Add to return array
-			profiles.push(profile);
-		} catch(e) {
-			// Push to error stack
-			failedRows.push( rowIdentifier );
+			// Grab current block
+			UIBlock = UIBlocks[UIBlockIndex];
+			rowIdentifier = 'Row ' + UIBlockIndex;
+
+			try {
+				var contentBlock = DOM.find(UIBlock, '.UIImageBlock_Content'),
+						a = DOM.find(contentBlock, 'a'),
+						profileId = a.getAttribute('data-hovercard').match(/\?id=(\d+)/)[1];
+
+				// TODO: Make .find's and such more defensive
+
+				rowIdentifier = a.innerHTML;
+
+				// Grab subscribed status and profile id
+				profile = {
+					'subscribed': !DOM.find(UIBlock, '.subscribedButton').className.match(/hidden_elem/),
+					'id': profileId };
+
+				// Show the profile options
+				SubscriptionFlyoutController.show(
+					DOM.find(UIBlock, '.subscribeButtonsContainer')
+				);
+
+				// Generate checks (this is a slow DOM touch/repaint trigger; I would love to speed it up)
+				var content = document.getElementById('subscriptionFlyoutContent');
+				EditSubscriptions.init(content, profileId, 3);
+
+
+				// Grab the menu items
+				var menuItems = DOM.scry(body, '.SubscriptionMenuItem'),
+						menuItem,
+						menuText,
+						i;
+
+				// Get values of each item
+				for( i = menuItems.length; i--; ) {
+					menuItem = menuItems[i];
+
+					// Remove the hidden overlays
+					if( Parent.byClass(menuItem, 'hidden_elem') ) {
+						continue;
+					}
+
+					menuText = DOM.getText(menuItem);
+
+					// Store item to profile
+					profile[menuText] = {
+						'chk': !!menuItem.className.match(checkedRegex),
+						'val': DOM.find(menuItem, 'input').value
+					};
+				}
+
+				// Add to return array
+				profiles.push(profile);
+			} catch(e) {
+				// Push to error stack
+				failedRows.push( rowIdentifier );
+			}
 		}
+
+		// Async do-again in 100ms
+		setTimeout(scrapeProfiles, 100);
 	}
 
-	// Spit out errors
-	if( failedRows.length > 0 ) {
-		alert( 'Errors occurred with:\n' + failedRows.join('\n') );
-	}
-
-	// Callback with profiles
-	callback = callback || noop;
-	callback(profiles);
+	// Begin more async
+	scrapeProfiles();
 }
 
 /**
@@ -202,7 +216,7 @@ var inputSubscribeLevel = inputs.subscribeLevel || '',
 
 var setAllSubscriptions = function (profiles, callback) {
 		// TODO: Relocalize all options
-		
+
 		// Personal choice to reverse profiles (top down is preferred)
 		profiles.reverse();
 
@@ -213,7 +227,7 @@ var setAllSubscriptions = function (profiles, callback) {
 					category,
 					i,
 					xhrData;
-			
+
 			if( !profile ) {
 				callback = callback || noop;
 				callback();
@@ -231,7 +245,7 @@ var setAllSubscriptions = function (profiles, callback) {
 				for( i = possibleSubscribeLevels.length; i--; ) {
 					// Localize posible value
 					possibleSubscribeLevel = profile[ possibleSubscribeLevels[i] ];
-					
+
 					// If it is set, use it
 					if( possibleSubscribeLevel.chk ) {
 						break;
@@ -240,17 +254,17 @@ var setAllSubscriptions = function (profiles, callback) {
 			}
 			// Use the subscribe level
 			subscribeLevel = possibleSubscribeLevel.val;
-			
+
 			// Check each category
 			for( i = possibleCategories.length; i--; ) {
 				possibleCategory = possibleCategories[i];
-				
+
 				// If user-specified, use what they chose
 				if( inputCategories.hasOwnProperty(possibleCategory) ) {
 					// Use it if true
 					if( inputCategories[possibleCategory] ) {
 						categories.push( profile[possibleCategory].val );
-					}					
+					}
 				// Otherwise, use the current value
 				} else {
 					// Localize object
