@@ -398,15 +398,15 @@ setStyle( body, paddingContainerChildren);
 			var	i,
 					len,
 					categoryObj,
-					inputCategories = [];
+					inputCategories = {};
 
 			for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
 				categoryObj = categoryObjArr[i];
 
-				if( categoryObj.input.checked ) {
+				if( categoryObj.state !== 0 ) {
 					// Performance boost (Zakas)
 					// Use your boost to get through!
-					inputCategories[inputCategories.length] = categoryObj.value;
+					inputCategories[categoryObj.value] = (categoryObj.state === 1);
 				}
 			}
 
@@ -414,20 +414,25 @@ setStyle( body, paddingContainerChildren);
 		}
 
 		submitButton.onclick = function () { // TODO: Collect info from disables
-			var inputLevel = getLevel(levelObjArr),
-					inputCategories = getCategories(categoryObjArr);
+			var formData = {},
+					options = { 'skipUnsubscribed': optionsSkipUnsubscribedObj.input.checked };
+			
+			if( levelFieldsetObj.state ) {
+				formData.subscribeLevel = getLevel(levelObjArr);
+			}
+			
+			if( categoryFieldsetObj.state ) {
+				formData.categories = getCategories(categoryObjArr);
+			}
 
-			console.log( inputLevel, inputCategories );
+			console.log( formData, options );
 		};
 /** END FUNCTIONALITY BINDING **/
 
 // Expose container to the world
 d.body.appendChild(container);
 
-// TODO: Bind disable handling for 'ignore this section'
 // TODO: Add checkbox for 'skip unsubscribed friends' but build to handle any callback fn
-// TODO: Separate each friend into data object, then push onto massive array
-// TODO: Add 'ignore this section' (make it look like a link) into legend instead of as a checkbox
 // TODO: Move function binding for Rem/DoC/Add down here?
 
 // TODO: Add in Rem All, DoC All, Add All buttons and bindings
