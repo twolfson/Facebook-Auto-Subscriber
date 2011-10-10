@@ -49,8 +49,7 @@ var i,
 		label,
 		key,
 		val,
-		categoryFieldsetObj =
-			{ 'state': 1 },
+		categoryFieldsetObj =	{ 'state': 1 },
 		categoryObjArr = [
 			{	'value': 'Life Events',
 				'state': 1 },
@@ -67,7 +66,8 @@ var i,
 			{	'value': 'Other Activity',
 				'state': 1	}
 		],
-		categoryObj;
+		categoryObj,
+		optionsSkipUnsubscribedObj = {};
 /** END DRY PREP DATA **/
 
 /** BEGIN GENERATE HTML FOR CONTAINER **/
@@ -80,12 +80,12 @@ var container = crElt('div'),
 				bodyDescription = bindNewElt(body, 'div'),
 				bodyDescriptionBr = bindNewElt(body, 'br'),
 				// Level fieldset
-				levelFieldset = bindNewElt(body, 'fieldset');
-var				levelLegend = bindNewElt(levelFieldset, 'legend'),
+				levelFieldset = bindNewElt(body, 'fieldset'),
+   				levelLegend = bindNewElt(levelFieldset, 'legend'),
 						levelLegendSpanPreU = bindNewElt(levelLegend, 'span');
 						levelFieldsetObj.u = bindNewElt(levelLegend, 'u');
-						levelLegendSpanPostU = bindNewElt(levelLegend, 'span');
-var				levelFieldRow,
+var					levelLegendSpanPostU = bindNewElt(levelLegend, 'span'),
+   				levelFieldRow,
 					levelToggleDiv = bindNewElt(levelFieldset, 'div');
 					levelFieldsetObj.toggleDiv = levelToggleDiv;
 					for( i = 0, len = levelObjArr.length; i < len; i++ ) {
@@ -96,12 +96,12 @@ var				levelFieldRow,
 						levelObj.label = bindNewElt(levelToggleDiv, 'label');
 					}
 				// Category fieldset
-var     categoryFieldset = bindNewElt(body, 'fieldset');
-var				categoryLegend = bindNewElt(categoryFieldset, 'legend'),
+var     categoryFieldset = bindNewElt(body, 'fieldset'),
+   				categoryLegend = bindNewElt(categoryFieldset, 'legend'),
 						categoryLegendSpanPreU = bindNewElt(categoryLegend, 'span');
 						categoryFieldsetObj.u = bindNewElt(categoryLegend, 'u');
-						categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span');
-var				categoryToggleDiv = bindNewElt(categoryFieldset, 'div');
+var					categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span'),
+   				categoryToggleDiv = bindNewElt(categoryFieldset, 'div');
 					categoryFieldsetObj.toggleDiv = categoryToggleDiv;
 var					categorySpan = bindNewElt(categoryToggleDiv, 'span'),
 						categoryFieldRow;
@@ -112,7 +112,11 @@ var					categorySpan = bindNewElt(categoryToggleDiv, 'span'),
 						categoryObj.label = bindNewElt(categoryToggleDiv, 'label');
 					}
 					// TODO: Add in Add All/ DoC All / Rem All buttons
-				// TODO: Skip unsubscribed friends
+				// Skip unsubscribed friends
+var			optionsFieldset = bindNewElt(body, 'fieldset'),
+					optionsLegend = bindNewElt(optionsFieldset, 'legend');
+					optionsSkipUnsubscribedObj.input = bindNewElt(optionsFieldset, 'input');
+					optionsSkipUnsubscribedObj.label = bindNewElt(optionsFieldset, 'label');
 				// Submit Container
 var			submitContainer = bindNewElt(body, 'div'),
 					submitButton = bindNewElt(submitContainer, 'input');
@@ -182,6 +186,11 @@ var			submitContainer = bindNewElt(body, 'div'),
 			categoryObj.input.type = 'checkbox';
 			categoryObj.htmlFn = exec( getCategoryHTMLFn(categoryObj) );
 		}
+
+	// Options fieldset
+		optionsLegend.innerHTML = 'Options';
+		optionsSkipUnsubscribedObj.input.type = 'checkbox';
+		optionsSkipUnsubscribedObj.label.innerHTML = 'Skip unsubscribed friends';
 	// Submit container
 		submitButton.type = 'button';
 		submitButton.value = 'Change All Subscriptions';
@@ -190,7 +199,7 @@ var			submitContainer = bindNewElt(body, 'div'),
 
 /** BEGIN STYLING CONTAINER **/
 // Make it a popup with style (It's over 9000!!)
-setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 300px; position: absolute; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF;' );
+setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 300px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF;' );
 
 // Header
 var paddingContainerChildren = 'padding: .2em .3em;';
@@ -213,6 +222,15 @@ setStyle( body, paddingContainerChildren);
 
 			// TODO: Use a pre-existing class instead
 			setStyle(toggleDiv, style);
+			
+			var i,
+					state;
+			// Bolden selection
+			for( i = levelObjArr.length; i--; ) {
+				levelObj = levelObjArr[i];
+				state = levelObj.input.checked;
+				setStyle( levelObj.label, state ? '' : 'font-weight: normal;' );
+			}
 		}
 	}
 	levelFieldsetObj.styleFn = exec( getFieldsetStyleFn(levelFieldsetObj) );
@@ -247,6 +265,12 @@ setStyle( body, paddingContainerChildren);
 			setStyle( categoryObj.label, 'font-weight: normal;' );
 			categoryObj.styleFn = exec( getCategoryStyleFn(categoryObj) );
 		}
+	// Options fieldset
+	optionsSkipUnsubscribedObj.input.checked = true;
+	optionsSkipUnsubscribedObj.styleFn = exec( function () {
+		var state = optionsSkipUnsubscribedObj.input.checked;
+		setStyle( optionsSkipUnsubscribedObj.label, state ? '' : 'font-weight: normal;' );
+	} );
 	// Submit container
 	setStyle( submitContainer, 'text-align: right;' );
 		setStyle( submitButton, 'cursor: pointer;' );
@@ -288,6 +312,7 @@ setStyle( body, paddingContainerChildren);
 				});
 
 			levelObj.label.setAttribute('for', key);
+			levelObj.input.onclick = levelFieldsetObj.styleFn;
 		}
 	// Category fieldset
 		// Legend
@@ -334,6 +359,20 @@ setStyle( body, paddingContainerChildren);
 
 			// DOM Level 0 functionality
 			input.onclick = getCategoryOnclick(categoryObj);
+		}
+
+	// Options fieldset
+		val = 'autoSubscribeSkipUnsubscribedFriends';
+		input = optionsSkipUnsubscribedObj.input;
+		setAttributes( input, {
+					'id': val,
+					'name': val,
+					'checked': 'checked'
+				});
+		optionsSkipUnsubscribedObj.label.setAttribute('for', val);
+
+		input.onclick = function () {
+			optionsSkipUnsubscribedObj.styleFn();
 		}
 
 	// Submit container
