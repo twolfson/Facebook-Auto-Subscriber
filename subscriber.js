@@ -193,7 +193,7 @@ function grabAllSubscriptions(callback) {
  * @param {Boolean} inputs.categories.key If true, check item. If false, uncheck item. If never specified, use default.
  * @param {Object} [options] Options object
  * @param {Boolean} [skipUnsubscribed] Skip all unsubscribed persons
- * @param {Boolean} [unsubscribeAll] Unsubscribe all of your friends // TODO: Build into special alt script
+ * @param {Boolean} [unsubscribeAll] Unsubscribe all of your friends // TODO: Build into special alt popup
  * @param {Integer} [concurrentRequests] Amount of XHR to run at the same time. This will fallback to 8.
  */
 function setAllSubscriptionsGenerator(inputs, options) {
@@ -233,8 +233,15 @@ var setAllSubscriptions = function (profiles, callback) {
 				callback();
 				return;
 			}
+			
+			// TODO: Build out unsubscribeAll
+			// {location: 13, profile_id} url: /ajax/follow/unfollow_profile.php
 
-			// TODO: Check for unsubscribed
+			// Skip if profile should be skipped
+			if( skipUnsubscribed && !profile.subscribed ) {
+				fireNextReq();
+				retrun;
+			}
 
 			// Use the given subscribe level
 			possibleSubscribeLevel = profile[inputSubscribeLevel];
@@ -304,7 +311,8 @@ scrollFriendsAsync( function () {
 	grabAllSubscriptions(
 		setAllSubscriptionsGenerator(
 			{ 'subscribeLevel': 'Most Important',
-				'categories': {'Life Events': true} }
+				'categories': {'Life Events': true} },
+			{ 'skipUnsubscribed': true }
 		)
 	);
 } );
