@@ -125,7 +125,7 @@ function grabAllSubscriptions(callback) {
 				DOM.find(UIBlock, '.subscribeButtonsContainer')
 			);
 			
-			// Generate checks
+			// Generate checks (this is a slow DOM touch/repaint trigger; I would love to speed it up)
 			var content = document.getElementById('subscriptionFlyoutContent');
 			EditSubscriptions.init(content, profileId, 3);
 
@@ -142,7 +142,6 @@ function grabAllSubscriptions(callback) {
 
 				// Remove the hidden overlays
 				if( Parent.byClass(menuItem, 'hidden_elem') ) {
-					menuItem.parentNode.removeChild(menuItem);
 					continue;
 				}
 
