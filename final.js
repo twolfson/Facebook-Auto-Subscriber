@@ -355,6 +355,19 @@ function exec(fn) {
 	return fn;
 }
 
+// Helper function for stopping normal event behavior
+function preventNormal(e) {
+	e = e || window.event;
+
+	e.cancelBubble = true;
+	if( e.preventDefault ) {
+		e.preventDefault();
+	}
+	if( e.stopPropagation ) {
+		e.stopPropagation();
+	}
+}
+
 /** BEGIN DRY PREP DATA **/
 var i,
 		len,
@@ -383,9 +396,9 @@ var i,
 				'state': 1	},
 			{	'value': 'Comments and Likes',
 				'state': 1	},
-			{	'value': 'Music and Videos',
-				'state': 1	},
 			{	'value': 'Other Activity',
+				'state': 1	},
+			{	'value': 'Music and Videos',
 				'state': 1	}
 		],
 		categoryObj,
@@ -425,7 +438,13 @@ var     categoryFieldset = bindNewElt(body, 'fieldset'),
 var					categoryLegendSpanPostU = bindNewElt(categoryLegend, 'span'),
    				categoryToggleDiv = bindNewElt(categoryFieldset, 'div');
 					categoryFieldsetObj.toggleDiv = categoryToggleDiv;
-var					categorySpan = bindNewElt(categoryToggleDiv, 'span'),
+var					categoryDiv = bindNewElt(categoryToggleDiv, 'div'),
+							categoryDivAddBox = bindNewElt(categoryDiv, 'input'),
+							categoryDivAddLabel = bindNewElt(categoryDiv, 'label'),
+							categoryDivDoCBox = bindNewElt(categoryDiv, 'input'),
+							categoryDivDoCLabel = bindNewElt(categoryDiv, 'label'),
+							categoryDivRemBox = bindNewElt(categoryDiv, 'input'),
+							categoryDivRemLabel = bindNewElt(categoryDiv, 'label'),
 						categoryFieldRow;
 					for( i = 0, len = categoryObjArr.length; i < len; i++ ) {
 						categoryObj = categoryObjArr[i];
@@ -481,24 +500,29 @@ var			submitContainer = bindNewElt(body, 'div'),
 		categoryLegendSpanPreU.innerHTML = 'What types of updates? (';
 		categoryLegendSpanPostU.innerHTML = ')';
 		categoryFieldsetObj.htmlFn = exec( getFieldsetHtmlFn(categoryFieldsetObj) );
-		categorySpan.innerHTML = '&nbsp;// <b>Rem</b> = \'Remove from feed\';<br/>&nbsp;// <b>DoC</b> = \'Don\'t Change\'; <b>Add</b> = \'Add to feed\';';
+		// Category span
+			categoryDivAddBox.type = 'checkbox';
+			categoryDivAddLabel.innerHTML = "<b>Add to feed</b>&nbsp;";
+			categoryDivDoCBox.type = 'checkbox';
+			categoryDivDoCLabel.innerHTML = "<i>Don't Change</i>&nbsp;";
+			categoryDivRemBox.type = 'checkbox';
+			categoryDivRemLabel.innerHTML = "Remove from feed";
 
 		function getCategoryHTMLFn(categoryObj) {
-			var labelHTML = '(Rem/DoC/Add) ' + categoryObj.value;
+			var labelHTML = categoryObj.value;
 			return function () {
 				var label = categoryObj.label,
-						labelReplaceFn = function (text, index) { return '<b>' + text + '</b>'; },
 						state = categoryObj.state;
 
 				// -1 will be remove item from feed
 				if( state === -1 ) {
-					label.innerHTML = labelHTML.replace('Rem', labelReplaceFn);
+					label.innerHTML = labelHTML;
 				// 0 will be don't change
 				} else if ( state === 0 ) {
-					label.innerHTML = labelHTML.replace('DoC', labelReplaceFn);
+					label.innerHTML = '<i>' + labelHTML + '</i>';
 				// 1 will be add item to feed
 				} else {
-					label.innerHTML = labelHTML.replace('Add', labelReplaceFn);
+					label.innerHTML = '<b>' + labelHTML + '</b>';
 				}
 			};
 		}
@@ -521,7 +545,7 @@ var			submitContainer = bindNewElt(body, 'div'),
 
 /** BEGIN STYLING CONTAINER **/
 // Make it a popup with style (It's over 9000!!)
-setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 300px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF;' );
+setStyle( container, 'z-index: 9001; border: 1px solid #000; width: 320px; position: fixed; left: 40%; top: 10%; background: #FFF; outline: 2px solid #FFF;' );
 
 // Header
 var paddingContainerChildren = 'padding: .2em .3em;';
@@ -544,7 +568,7 @@ setStyle( body, paddingContainerChildren);
 
 			// TODO: Use a pre-existing class instead
 			setStyle(toggleDiv, style);
-			
+
 			var i,
 					state;
 			// Bolden selection
@@ -562,6 +586,15 @@ setStyle( body, paddingContainerChildren);
 			levelObj.input.checked = levelObj.checked;
 		}
 	// Category fieldset
+		// Category span
+		setStyle( categoryDiv, 'text-align: center; margin: 0.4em 0 0.6em;' );
+			categoryDivAddBox.checked = true;
+			setStyle( categoryDivAddLabel, 'font-weight: normal' );
+			categoryDivDoCBox.indeterminate = true;
+			setStyle( categoryDivDoCLabel, 'font-weight: normal' );
+			categoryDivRemBox.checked = false;
+			setStyle( categoryDivRemLabel, 'font-weight: normal' );
+
 	categoryFieldsetObj.styleFn = exec( getFieldsetStyleFn(categoryFieldsetObj) );
 		// Checkboxes
 		function getCategoryStyleFn(categoryObj) {
@@ -639,6 +672,51 @@ setStyle( body, paddingContainerChildren);
 	// Category fieldset
 		// Legend
 		categoryFieldsetObj.u.onclick = getFieldsetOnclick(categoryFieldsetObj);
+		// Span
+			function getCategoryBoxOnclick(state) {
+				var $categoryObjArr = categoryObjArr,
+						$preventNormal = preventNormal;
+				return function (e) {
+					var $$categoryObjArr = $categoryObjArr,
+							$state = state,
+							categoryObj,
+							i = $$categoryObjArr.length;
+					
+					// Stop default action
+					$preventNormal(e);
+					
+					for(;i--;) {
+						categoryObj = $$categoryObjArr[i];
+						categoryObj.state = $state;
+						categoryObj.htmlFn();
+						categoryObj.styleFn();
+					}
+				};
+				
+			}
+			val = 'autoSubscribeCategoryDivAddBox';
+			setAttributes( categoryDivAddBox, {
+					'id': val,
+					'name': val
+				});
+			categoryDivAddLabel.setAttribute('for', val);
+			val = 'autoSubscribeCategoryDivDoCBox';
+			setAttributes( categoryDivDoCBox, {
+					'id': val,
+					'name': val
+				});
+			categoryDivDoCLabel.setAttribute('for', val);
+
+			val = 'autoSubscribeCcategoryDivRemBox';
+			setAttributes( categoryDivRemBox, {
+					'id': val,
+					'name': val
+				});
+			categoryDivRemLabel.setAttribute('for', val);
+
+			categoryDivAddBox.onclick = getCategoryBoxOnclick(1);
+			categoryDivDoCBox.onclick = getCategoryBoxOnclick(0);
+			categoryDivRemBox.onclick = getCategoryBoxOnclick(-1);
 		// Checkboxes
 		// State function for checkboxes
 		function getCategoryOnclick(categoryObj) {
@@ -738,11 +816,11 @@ setStyle( body, paddingContainerChildren);
 		submitButton.onclick = function () { // TODO: Collect info from disables
 			var formData = {},
 					options = { 'skipUnsubscribed': optionsSkipUnsubscribedObj.input.checked };
-			
+
 			if( levelFieldsetObj.state ) {
 				formData.subscribeLevel = getLevel(levelObjArr);
 			}
-			
+
 			if( categoryFieldsetObj.state ) {
 				formData.categories = getCategories(categoryObjArr);
 			}
@@ -790,8 +868,5 @@ if( !pageQueryString.match(/sk=subscribedto/) || !pageQueryString.match(/filter=
 }
 /** END PATCH FOR WRONG PAGE **/
 
-// TODO: Add checkbox for 'skip unsubscribed friends' but build to handle any callback fn
-// TODO: Move function binding for Rem/DoC/Add down here?
-
-// TODO: Add in Rem All, DoC All, Add All buttons and bindings
+// TODO: Rebuild unsubscribe friends to handle any callback fn
 }(document));
