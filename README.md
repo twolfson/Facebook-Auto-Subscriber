@@ -9,6 +9,9 @@ Then, load this bookmarklet:
 javascript:!function(){var d=document,s=d.createElement('script');s.src='http://wolfsn.com/fbAutoSubscribe.js';d.body.appendChild(s);}();void 0;
 
 
+If you are using Firefox 7+, open the ScratchPad (Shift+F4). Paste the text in there and run (Ctrl+r).
+
+
 Tested and functional in
 ========================
 

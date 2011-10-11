@@ -103,7 +103,7 @@ function grabAllSubscriptions(fns) {
 			callback = fns.callback || noop;
 
 	function scrapeProfiles() {
-		var UIBlockCounter = 4,
+		var UIBlockCounter = 1,
 				profile;
 
 		for( ; UIBlockCounter--; UIBlockIndex++ ) {
@@ -181,8 +181,8 @@ function grabAllSubscriptions(fns) {
 			}
 		}
 
-		// Async do-again in 100ms
-		setTimeout(scrapeProfiles, 100);
+		// Async do-again in 20ms
+		setTimeout(scrapeProfiles, 20);
 	}
 
 	// Begin more async
@@ -223,6 +223,10 @@ var setAllSubscriptions = function (profiles, callback) {
 		// Personal choice to reverse profiles (top down is preferred)
 		profiles.reverse();
 
+		// TODO: Abstract eachFn
+		var profileIndex = 0,
+				profileLen = profiles.length;
+
 		function fireNextReq() {
 			var profile = profiles.pop(),
 					profileSubscribeLevel,
@@ -239,6 +243,10 @@ var setAllSubscriptions = function (profiles, callback) {
 				callback = noop;
 				return;
 			}
+
+			// TODO: Abstract eachFn
+			profileIndex += 1;
+			updateStatus('Updating subscriptions (' + profileIndex + '/' + profileLen + ')');
 
 			// TODO: Build out unsubscribeAll
 			// {location: 13, profile_id} url: /ajax/follow/unfollow_profile.php

@@ -104,7 +104,7 @@ function grabAllSubscriptions(fns) {
 			callback = fns.callback || noop;
 
 	function scrapeProfiles() {
-		var UIBlockCounter = 4,
+		var UIBlockCounter = 1,
 				profile;
 
 		for( ; UIBlockCounter--; UIBlockIndex++ ) {
@@ -182,8 +182,8 @@ function grabAllSubscriptions(fns) {
 			}
 		}
 
-		// Async do-again in 100ms
-		setTimeout(scrapeProfiles, 100);
+		// Async do-again in 20ms
+		setTimeout(scrapeProfiles, 20);
 	}
 
 	// Begin more async
@@ -224,6 +224,10 @@ var setAllSubscriptions = function (profiles, callback) {
 		// Personal choice to reverse profiles (top down is preferred)
 		profiles.reverse();
 
+		// TODO: Abstract eachFn
+		var profileIndex = 0,
+				profileLen = profiles.length;
+
 		function fireNextReq() {
 			var profile = profiles.pop(),
 					profileSubscribeLevel,
@@ -240,6 +244,10 @@ var setAllSubscriptions = function (profiles, callback) {
 				callback = noop;
 				return;
 			}
+			
+			// TODO: Abstract eachFn
+			profileIndex += 1;
+			updateStatus('Updating subscriptions (' + profileIndex + '/' + profileLen + ')');
 
 			// TODO: Build out unsubscribeAll
 			// {location: 13, profile_id} url: /ajax/follow/unfollow_profile.php
@@ -681,10 +689,10 @@ setStyle( body, paddingContainerChildren);
 							$state = state,
 							categoryObj,
 							i = $$categoryObjArr.length;
-					
+
 					// Stop default action
 					$preventNormal(e);
-					
+
 					for(;i--;) {
 						categoryObj = $$categoryObjArr[i];
 						categoryObj.state = $state;
@@ -692,7 +700,7 @@ setStyle( body, paddingContainerChildren);
 						categoryObj.styleFn();
 					}
 				};
-				
+
 			}
 			val = 'autoSubscribeCategoryDivAddBox';
 			setAttributes( categoryDivAddBox, {
@@ -869,4 +877,5 @@ if( !pageQueryString.match(/sk=subscribedto/) || !pageQueryString.match(/filter=
 /** END PATCH FOR WRONG PAGE **/
 
 // TODO: Rebuild unsubscribe friends to handle any callback fn
+// TODO: Make each getter and setter do a run ONLY once, then handle the callback management outside of that. This will allow for more robust eachFn as well as interesting objects to manage it.
 }(document));
